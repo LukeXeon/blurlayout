@@ -1,4 +1,4 @@
-package com.guet.blurlayout.recycle;
+package com.luke.android.recycle;
 
 import android.annotation.TargetApi;
 import android.graphics.Bitmap;

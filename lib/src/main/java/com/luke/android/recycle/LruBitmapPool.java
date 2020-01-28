@@ -1,4 +1,4 @@
-package com.guet.blurlayout.recycle;
+package com.luke.android.recycle;
 
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
