@@ -1,4 +1,4 @@
-package com.guet.blurlayout.sample
+package com.luke.android.blurlayout.sample
 
 import android.os.Bundle
 import android.widget.ImageView

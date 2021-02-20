@@ -1,4 +1,4 @@
-package com.guet.blurlayout
+package com.materialx.blurlayout
 
 import androidx.test.InstrumentationRegistry
 import androidx.test.runner.AndroidJUnit4

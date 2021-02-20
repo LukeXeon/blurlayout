@@ -1,4 +1,4 @@
-package com.guet.blurlayout
+package com.materialx.blurlayout
 
 import org.junit.Test
 
