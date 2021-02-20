@@ -26,10 +26,10 @@ import kotlin.math.min
 
 
 class BlurLayout @JvmOverloads constructor(
-    context: Context,
-    attrs: AttributeSet? = null,
-    defStyleAttr: Int = 0
-) : FrameLayout(context, attrs, defStyleAttr) {
+        context: Context,
+        attrs: AttributeSet? = null,
+        defStyleAttr: Int = 0
+) : FrameLayout(context, attrs, defStyleAttr), ViewTreeObserver.OnPreDrawListener {
 
     @Px
     var cornerRadius: Float = 0f
@@ -52,7 +52,7 @@ class BlurLayout @JvmOverloads constructor(
         install(context)
         if (attrs != null) {
             val a = context.obtainStyledAttributes(
-                attrs, R.styleable.BlurLayout, defStyleAttr, 0
+                    attrs, R.styleable.BlurLayout, defStyleAttr, 0
             )
             cornerRadius = a.getDimension(R.styleable.BlurLayout_cornerRadius, 0f)
             blurSampling = a.getFloat(R.styleable.BlurLayout_blurSampling, 4f)
@@ -73,9 +73,9 @@ class BlurLayout @JvmOverloads constructor(
         fun loadShader(bitmap: Bitmap): BitmapShader {
             return sharedShaderPool.getOrPut(bitmap) {
                 BitmapShader(
-                    bitmap,
-                    Shader.TileMode.MIRROR,
-                    Shader.TileMode.MIRROR
+                        bitmap,
+                        Shader.TileMode.MIRROR,
+                        Shader.TileMode.MIRROR
                 )
             }
         }
@@ -125,18 +125,18 @@ class BlurLayout @JvmOverloads constructor(
     }
 
     private inner class DrawingTask(
-        val width: Int,
-        val height: Int,
-        val cornerRadius: Float,
-        val blurSampling: Float,
-        val blurRadius: Float
+            val width: Int,
+            val height: Int,
+            val cornerRadius: Float,
+            val blurSampling: Float,
+            val blurRadius: Float
     ) : Runnable {
 
         override fun run() {
             val scaledWidth = (width / blurSampling).toInt()
             val scaledHeight = (height / blurSampling).toInt()
             val bitmap = sharedBitmapPool.getDirty(
-                scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888
+                    scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888
             )
             // 在后台慢慢用软件画图来画，防止主线程卡住
             // 因为软件绘制实在是太慢了
@@ -173,8 +173,8 @@ class BlurLayout @JvmOverloads constructor(
             var output: Allocation? = null
             try {
                 input = Allocation.createFromBitmap(
-                    rs, bitmap, Allocation.MipmapControl.MIPMAP_NONE,
-                    Allocation.USAGE_SCRIPT
+                        rs, bitmap, Allocation.MipmapControl.MIPMAP_NONE,
+                        Allocation.USAGE_SCRIPT
                 )
                 output = Allocation.createTyped(rs, input.type)
                 blur.setInput(input)
@@ -193,43 +193,43 @@ class BlurLayout @JvmOverloads constructor(
                 // 经过渲染的Bitmap由于缩放的关系
                 // 可能会比View小，所以要做特殊处理，把它放大回去
                 canvas.scale(
-                    blurSampling,
-                    blurSampling
+                        blurSampling,
+                        blurSampling
                 )
                 canvas.drawRoundRect(
-                    drawingRectF.apply {
-                        set(
-                            0f,
-                            0f,
-                            width.toFloat() / blurSampling,
-                            height.toFloat() / blurSampling
-                        )
-                    },
-                    cornerRadius / blurSampling,
-                    cornerRadius / blurSampling,
-                    paint.apply {
-                        reset()
-                        isAntiAlias = true
-                        shader = loadShader(bitmap)
-                    }
+                        drawingRectF.apply {
+                            set(
+                                    0f,
+                                    0f,
+                                    width.toFloat() / blurSampling,
+                                    height.toFloat() / blurSampling
+                            )
+                        },
+                        cornerRadius / blurSampling,
+                        cornerRadius / blurSampling,
+                        paint.apply {
+                            reset()
+                            isAntiAlias = true
+                            shader = loadShader(bitmap)
+                        }
                 )
                 canvas.restore()
             } else {
                 canvas.drawBitmap(
-                    bitmap,
-                    null,
-                    drawingRect.apply {
-                        set(
-                            0,
-                            0,
-                            width,
-                            height
-                        )
-                    },
-                    paint.apply {
-                        reset()
-                        isAntiAlias = true
-                    }
+                        bitmap,
+                        null,
+                        drawingRect.apply {
+                            set(
+                                    0,
+                                    0,
+                                    width,
+                                    height
+                            )
+                        },
+                        paint.apply {
+                            reset()
+                            isAntiAlias = true
+                        }
                 )
             }
         }
@@ -242,7 +242,25 @@ class BlurLayout @JvmOverloads constructor(
     private val paint = Paint()
     private val drawingRectF = RectF()
     private val drawingRect = Rect()
-    private val drawingObserver = ViewTreeObserver.OnPreDrawListener {
+    private val drawer = TextureView(context)
+    private val drawingThread: Handler
+    private val rs = RenderScript.create(context)
+    private val blur = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
+
+    init {
+        val thread = HandlerThread(
+                toString(),
+                Process.THREAD_PRIORITY_DISPLAY
+        )
+        thread.start()
+        drawingThread = Handler(thread.looper)
+        drawer.isOpaque = false
+        addView(drawer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    }
+
+    private var recordingCanvas: Canvas? = null
+
+    override fun onPreDraw(): Boolean {
         if (!isDirty || hasOtherDirty(this)) {
             getGlobalVisibleRect(visibleRect)
             val width = visibleRect.width()
@@ -254,8 +272,8 @@ class BlurLayout @JvmOverloads constructor(
                 val canvas = recorder.beginRecording(width, height)
                 // 转换canvas来到View的绝对位置
                 canvas.translate(
-                    -visibleRect.left.toFloat(),
-                    -visibleRect.top.toFloat()
+                        -visibleRect.left.toFloat(),
+                        -visibleRect.top.toFloat()
                 )
                 // 设置recordingCanvas用来识别，防止画到自己
                 recordingCanvas = canvas
@@ -265,48 +283,31 @@ class BlurLayout @JvmOverloads constructor(
                 recorder.endRecording()
             }
             HandlerCompat.postDelayed(
-                drawingThread, DrawingTask(
+                    drawingThread, DrawingTask(
                     width,
                     height,
                     cornerRadius,
                     blurSampling,
                     blurRadius
-                ),
-                taskToken,
-                0
+            ),
+                    taskToken,
+                    0
             )
         }
         if (indexOfChild(drawer) != 0) {
             removeView(drawer)
             addView(drawer, 0)
         }
-        true
+        return true
     }
-    private val drawer = TextureView(context)
-    private val drawingThread: Handler
-    private val rs = RenderScript.create(context)
-    private val blur = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
-
-    init {
-        val thread = HandlerThread(
-            toString(),
-            Process.THREAD_PRIORITY_DISPLAY
-        )
-        thread.start()
-        drawingThread = Handler(thread.looper)
-        drawer.isOpaque = false
-        addView(drawer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-    }
-
-    private var recordingCanvas: Canvas? = null
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        viewTreeObserver.addOnPreDrawListener(drawingObserver)
+        viewTreeObserver.addOnPreDrawListener(this)
     }
 
     override fun onDetachedFromWindow() {
-        viewTreeObserver.removeOnPreDrawListener(drawingObserver)
+        viewTreeObserver.removeOnPreDrawListener(this)
         drawingThread.removeCallbacksAndMessages(taskToken)
         super.onDetachedFromWindow()
     }
