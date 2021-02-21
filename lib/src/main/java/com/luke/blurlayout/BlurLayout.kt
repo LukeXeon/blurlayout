@@ -53,7 +53,7 @@ class BlurLayout @JvmOverloads constructor(
         }
 
     @ColorInt
-    var blurColor: Int = Color.WHITE
+    var maskColor: Int = Color.TRANSPARENT
 
     init {
         install(context)
@@ -64,7 +64,7 @@ class BlurLayout @JvmOverloads constructor(
             cornerRadius = a.getDimension(R.styleable.BlurLayout_cornerRadius, 0f)
             blurSampling = a.getFloat(R.styleable.BlurLayout_blurSampling, 4f)
             blurRadius = a.getDimension(R.styleable.BlurLayout_blurRadius, 10f)
-            blurColor = a.getColor(R.styleable.BlurLayout_blurColor, Color.WHITE)
+            maskColor = a.getColor(R.styleable.BlurLayout_maskColor, Color.TRANSPARENT)
             a.recycle()
         }
     }
@@ -162,7 +162,8 @@ class BlurLayout @JvmOverloads constructor(
         val height: Int,
         val cornerRadius: Float,
         val blurSampling: Float,
-        val blurRadius: Float
+        val blurRadius: Float,
+        val maskColor: Int,
     ) : Runnable {
 
         override fun run() {
@@ -239,11 +240,28 @@ class BlurLayout @JvmOverloads constructor(
                     },
                     cornerRadius / blurSampling,
                     cornerRadius / blurSampling,
-                    paint.apply {
+                    bitmapPaint.apply {
                         reset()
+                        isFilterBitmap = true
                         isAntiAlias = true
-                        color = blurColor
                         shader = entry.shader
+                    }
+                )
+                canvas.drawRoundRect(
+                    drawingRectF.apply {
+                        set(
+                            0f,
+                            0f,
+                            width.toFloat() / blurSampling,
+                            height.toFloat() / blurSampling
+                        )
+                    },
+                    cornerRadius / blurSampling,
+                    cornerRadius / blurSampling,
+                    maskPaint.apply {
+                        reset()
+                        color = maskColor
+                        isAntiAlias = true
                     }
                 )
                 canvas.restore()
@@ -259,13 +277,31 @@ class BlurLayout @JvmOverloads constructor(
                             height
                         )
                     },
-                    paint.apply {
+                    bitmapPaint.apply {
                         reset()
-                        color = blurColor
+                        isFilterBitmap = true
+                        isAntiAlias = true
+                    }
+                )
+                canvas.drawRoundRect(
+                    drawingRectF.apply {
+                        set(
+                            0f,
+                            0f,
+                            width.toFloat(),
+                            height.toFloat()
+                        )
+                    },
+                    cornerRadius,
+                    cornerRadius,
+                    maskPaint.apply {
+                        reset()
+                        color = maskColor
                         isAntiAlias = true
                     }
                 )
             }
+
         }
     }
 
@@ -273,7 +309,8 @@ class BlurLayout @JvmOverloads constructor(
     private val recorder = Picture()
     private val backgroundCanvas = Canvas()
     private val visibleRect = Rect()
-    private val paint = Paint()
+    private val bitmapPaint = Paint()
+    private val maskPaint = Paint()
     private val drawingRectF = RectF()
     private val drawingRect = Rect()
     private val drawer = TextureView(context)
@@ -323,7 +360,8 @@ class BlurLayout @JvmOverloads constructor(
                     height,
                     cornerRadius,
                     blurSampling,
-                    blurRadius
+                    blurRadius,
+                    maskColor
                 ),
                 taskToken,
                 0

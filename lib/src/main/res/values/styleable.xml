@@ -3,6 +3,6 @@
         <attr name="cornerRadius" format="dimension"/>
         <attr name="blurSampling" format="float"/>
         <attr name="blurRadius" format="float"/>
-        <attr name="blurColor" format="color"/>
+        <attr name="maskColor" format="color"/>
     </declare-styleable>
 </resources>
