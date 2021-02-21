@@ -33,10 +33,10 @@ internal class TransitionLayout @JvmOverloads constructor(
             return
         }
         canvas.save()
-        val rate = 0.15f
-        val scale = 1 - normalized * 0.15f
+        val rate = 0.1f
+        val scale = 1 - normalized * rate
         val x = rate * width / 2 * normalized
-        val y = 0.1f * height * normalized
+        val y = 0.05f * height * normalized
         val a = (0.5f * normalized * 255).toInt()
         val r = normalized * resources.getDimension(R.dimen.uikit_radius)
         canvas.translate(x, y)
