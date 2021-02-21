@@ -1,2 +1,2 @@
-include ':app', ':lib'
-include ':drawerLayout'
+include ':app'
+include ':uikit'

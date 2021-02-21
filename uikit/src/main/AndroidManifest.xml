@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.luke.uikit">
+    <application>
+        <provider
+            android:multiprocess="true"
+            android:authorities="${applicationId}.uikit.initializer"
+            android:name=".shared.SharedInitializer"
+            android:exported="false" />
+    </application>
+</manifest>

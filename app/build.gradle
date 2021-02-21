@@ -29,8 +29,7 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.1.0'
     implementation 'com.github.chrisbanes:PhotoView:2.3.0'
     implementation 'com.github.bumptech.glide:glide:4.10.0'
-    implementation project(':lib')
-    implementation project(':drawerLayout')
+    implementation project(':uikit')
 
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'androidx.test:runner:1.2.0'
