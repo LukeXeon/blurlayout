@@ -5,7 +5,7 @@ import android.app.Application
 import android.os.Bundle
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
-import com.luke.uikit.stackview.ContentLayout
+import com.luke.uikit.popup.ContentLayout
 import java.util.*
 
 internal class SharedContentLayouts : Application.ActivityLifecycleCallbacks {

@@ -5,22 +5,20 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         tools:context=".MainActivity">
-
-    <ImageView
-            android:id="@+id/photo"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-
+    <FrameLayout
+        android:id="@+id/main_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+    </FrameLayout>
     <com.luke.uikit.blurlayout.BlurLayout
-            app:cornerRadius="15dp"
-            app:maskColor="#74D81B60"
-            android:layout_width="300dp"
-            android:layout_height="200dp"
-            android:layout_gravity="center">
-        <ImageView
-                android:layout_gravity="center"
-                android:id="@+id/image"
-                android:layout_width="120dp"
-                android:layout_height="120dp" />
+        android:layout_gravity="bottom"
+        app:maskColor="#BFFFFFFF"
+        android:layout_width="match_parent"
+        android:layout_height="80dp">
+        <TabHost
+            android:id="@+id/tabs"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+        </TabHost>
     </com.luke.uikit.blurlayout.BlurLayout>
 </FrameLayout>

@@ -2,14 +2,14 @@
 <merge xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <com.luke.uikit.stackview.TransitionLayout
+    <com.luke.uikit.popup.TransitionLayout
         android:fitsSystemWindows="true"
         android:id="@+id/transition_content"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@android:color/black">
 
-    </com.luke.uikit.stackview.TransitionLayout>
+    </com.luke.uikit.popup.TransitionLayout>
 
     <FrameLayout
         android:id="@+id/uikit_bottom_sheet_fragment_container"

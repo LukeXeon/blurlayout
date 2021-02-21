@@ -1,11 +1,11 @@
-package com.luke.uikit.stackview
+package com.luke.uikit.popup
 
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import com.luke.uikit.R
 import com.luke.uikit.shared.contentLayouts
 
-object StackViewManager {
+object PopupManager {
     fun show(activity: AppCompatActivity, fragment: Fragment) {
         val view = contentLayouts[activity]
         if (view != null) {
