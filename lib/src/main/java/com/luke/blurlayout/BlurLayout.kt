@@ -19,6 +19,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
+import androidx.annotation.ColorInt
 import androidx.annotation.Px
 import androidx.core.os.HandlerCompat
 import com.luke.blurlayout.bitmappool.LruBitmapPool
@@ -51,6 +52,9 @@ class BlurLayout @JvmOverloads constructor(
             field = max(25f, min(0f, value))
         }
 
+    @ColorInt
+    var blurColor: Int = Color.WHITE
+
     init {
         install(context)
         if (attrs != null) {
@@ -60,6 +64,7 @@ class BlurLayout @JvmOverloads constructor(
             cornerRadius = a.getDimension(R.styleable.BlurLayout_cornerRadius, 0f)
             blurSampling = a.getFloat(R.styleable.BlurLayout_blurSampling, 4f)
             blurRadius = a.getDimension(R.styleable.BlurLayout_blurRadius, 10f)
+            blurColor = a.getColor(R.styleable.BlurLayout_blurColor, Color.WHITE)
             a.recycle()
         }
     }
@@ -237,6 +242,7 @@ class BlurLayout @JvmOverloads constructor(
                     paint.apply {
                         reset()
                         isAntiAlias = true
+                        color = blurColor
                         shader = entry.shader
                     }
                 )
@@ -255,6 +261,7 @@ class BlurLayout @JvmOverloads constructor(
                     },
                     paint.apply {
                         reset()
+                        color = blurColor
                         isAntiAlias = true
                     }
                 )

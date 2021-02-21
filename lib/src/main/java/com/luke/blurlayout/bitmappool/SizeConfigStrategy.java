@@ -24,6 +24,7 @@ import android.os.Build;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Objects;
 import java.util.TreeMap;
 
 
@@ -87,7 +88,7 @@ public class SizeConfigStrategy implements LruPoolStrategy {
             Integer possibleSize = sizesForPossibleConfig.ceilingKey(size);
             if (possibleSize != null && possibleSize <= size * MAX_SIZE_MULTIPLE) {
                 if (possibleSize != size
-                        || (possibleConfig == null ? config != null : !possibleConfig.equals(config))) {
+                        || (!Objects.equals(possibleConfig, config))) {
                     keyPool.offer(result);
                     result = keyPool.get(possibleSize, possibleConfig);
                 }
