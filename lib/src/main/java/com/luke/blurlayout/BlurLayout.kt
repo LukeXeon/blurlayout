@@ -299,6 +299,7 @@ class BlurLayout @JvmOverloads constructor(
                 // 结束录制
                 recorder.endRecording()
             }
+            drawingThread.removeCallbacksAndMessages(taskToken)
             HandlerCompat.postDelayed(
                 drawingThread, DrawingTask(
                     width,
