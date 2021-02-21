@@ -70,7 +70,7 @@ class BlurLayout @JvmOverloads constructor(
     }
 
     private class SharedBitmapPool : ComponentCallbacks2 {
-        private val shaders = HashMap<Bitmap, BitmapShader>()
+        private val entries = HashMap<Bitmap, Entry>()
         private val bitmaps: LruBitmapPool
 
         init {
@@ -82,8 +82,8 @@ class BlurLayout @JvmOverloads constructor(
                 object : LruPoolStrategy by strategy {
                     override fun removeLast(): Bitmap {
                         val bitmap = strategy.removeLast()
-                        synchronized(shaders) {
-                            shaders.remove(bitmap)
+                        synchronized(entries) {
+                            entries.remove(bitmap)
                         }
                         return bitmap
                     }
@@ -105,22 +105,23 @@ class BlurLayout @JvmOverloads constructor(
         }
 
         operator fun get(width: Int, height: Int): Entry {
-            return Entry(bitmaps.getDirty(width, height, Bitmap.Config.ARGB_8888))
+            val bitmap = bitmaps.getDirty(width, height, Bitmap.Config.ARGB_8888)
+            return synchronized(entries) {
+                entries.getOrPut(bitmap) { Entry(bitmap) }
+            }
         }
 
         fun put(entry: Entry) {
             bitmaps.put(entry.bitmap)
         }
 
-        inner class Entry(val bitmap: Bitmap) {
-            val shader by lazy(shaders) {
-                shaders.getOrPut(bitmap) {
-                    BitmapShader(
-                        bitmap,
-                        Shader.TileMode.MIRROR,
-                        Shader.TileMode.MIRROR
-                    )
-                }
+        class Entry(val bitmap: Bitmap) {
+            val shader by lazy {
+                BitmapShader(
+                    bitmap,
+                    Shader.TileMode.MIRROR,
+                    Shader.TileMode.MIRROR
+                )
             }
         }
     }
