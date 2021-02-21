@@ -20,7 +20,6 @@ import androidx.annotation.Px
 import androidx.core.os.HandlerCompat
 import com.luke.uikit.R
 import com.luke.uikit.shared.SharedBitmapPool
-import com.luke.uikit.shared.SharedInitializer
 import com.luke.uikit.shared.bitmapPool
 import kotlin.math.max
 import kotlin.math.min
