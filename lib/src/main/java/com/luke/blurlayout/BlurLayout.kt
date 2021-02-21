@@ -22,7 +22,7 @@ import android.widget.FrameLayout
 import androidx.annotation.Px
 import androidx.core.os.HandlerCompat
 import com.luke.blurlayout.bitmappool.LruBitmapPool
-import com.luke.blurlayout.bitmappool.LruPoolStrategyAdapter
+import com.luke.blurlayout.bitmappool.LruPoolStrategy
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.max
 import kotlin.math.min
@@ -64,28 +64,52 @@ class BlurLayout @JvmOverloads constructor(
         }
     }
 
-    private companion object : LruPoolStrategyAdapter(
-        LruBitmapPool.getDefaultStrategy()
-    ), ComponentCallbacks2 {
+    private class SharedBitmapPool : ComponentCallbacks2 {
+        private val shaders = HashMap<Bitmap, BitmapShader>()
+        private val bitmaps: LruBitmapPool
 
-        val sharedBitmapPool: LruBitmapPool
-
-        val sharedShaderPool = HashMap<Bitmap, BitmapShader>()
-
-        private val isInit = AtomicReference<Application>()
-
-        override fun removeLast(): Bitmap {
-            val bitmap = super.removeLast()
-            synchronized(sharedShaderPool) {
-                sharedShaderPool.remove(bitmap)
-            }
-            return bitmap
+        init {
+            val strategy = LruBitmapPool.getDefaultStrategy()
+            val displayMetrics = Resources.getSystem().displayMetrics
+            val size = Int.SIZE_BYTES * displayMetrics.widthPixels * displayMetrics.heightPixels
+            bitmaps = LruBitmapPool(
+                size,
+                object : LruPoolStrategy by strategy {
+                    override fun removeLast(): Bitmap {
+                        val bitmap = strategy.removeLast()
+                        synchronized(shaders) {
+                            shaders.remove(bitmap)
+                        }
+                        return bitmap
+                    }
+                },
+                setOf(Bitmap.Config.ARGB_8888)
+            )
         }
 
-        // 如果shader没有创建，那就创建并缓存
-        fun loadShader(bitmap: Bitmap): BitmapShader {
-            return synchronized(sharedShaderPool) {
-                sharedShaderPool.getOrPut(bitmap) {
+        override fun onConfigurationChanged(newConfig: Configuration) {
+
+        }
+
+        override fun onLowMemory() {
+            bitmaps.clearMemory()
+        }
+
+        override fun onTrimMemory(level: Int) {
+            bitmaps.trimMemory(level)
+        }
+
+        operator fun get(width: Int, height: Int): Entry {
+            return Entry(bitmaps.getDirty(width, height, Bitmap.Config.ARGB_8888))
+        }
+
+        fun put(entry: Entry) {
+            bitmaps.put(entry.bitmap)
+        }
+
+        inner class Entry(val bitmap: Bitmap) {
+            val shader by lazy(shaders) {
+                shaders.getOrPut(bitmap) {
                     BitmapShader(
                         bitmap,
                         Shader.TileMode.MIRROR,
@@ -94,17 +118,18 @@ class BlurLayout @JvmOverloads constructor(
                 }
             }
         }
+    }
 
-        init {
-            val displayMetrics = Resources.getSystem().displayMetrics
-            val size = Int.SIZE_BYTES * displayMetrics.widthPixels * displayMetrics.heightPixels
-            sharedBitmapPool = LruBitmapPool(size, this, setOf(Bitmap.Config.ARGB_8888))
-        }
+    private companion object {
+
+        val sharedBitmapPool = SharedBitmapPool()
+
+        private val isInit = AtomicReference<Application>()
 
         fun install(context: Context) {
             val app = context.applicationContext as Application
             if (isInit.compareAndSet(null, app)) {
-                app.registerComponentCallbacks(this)
+                app.registerComponentCallbacks(sharedBitmapPool)
             }
         }
 
@@ -125,20 +150,6 @@ class BlurLayout @JvmOverloads constructor(
             }
         }
 
-        override fun onLowMemory() {
-            synchronized(sharedShaderPool) {
-                sharedShaderPool.clear()
-            }
-            sharedBitmapPool.clearMemory()
-        }
-
-        override fun onConfigurationChanged(newConfig: Configuration) {
-        }
-
-        override fun onTrimMemory(level: Int) {
-            sharedBitmapPool.trimMemory(level)
-        }
-
     }
 
     private inner class DrawingTask(
@@ -152,9 +163,8 @@ class BlurLayout @JvmOverloads constructor(
         override fun run() {
             val scaledWidth = (width / blurSampling).toInt()
             val scaledHeight = (height / blurSampling).toInt()
-            val bitmap = sharedBitmapPool.getDirty(
-                scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888
-            )
+            val entry = sharedBitmapPool[scaledWidth, scaledHeight]
+            val bitmap = entry.bitmap
             // 在后台慢慢用软件画图来画，防止主线程卡住
             // 因为软件绘制实在是太慢了
             backgroundCanvas.setBitmap(bitmap)
@@ -166,7 +176,7 @@ class BlurLayout @JvmOverloads constructor(
                     backgroundCanvas.drawPicture(recorder)
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    sharedBitmapPool.put(bitmap)
+                    sharedBitmapPool.put(entry)
                     return
                 } finally {
                     backgroundCanvas.restore()
@@ -177,10 +187,10 @@ class BlurLayout @JvmOverloads constructor(
             bitmap.prepareToDraw()
             try {
                 val canvas = drawer.lockCanvas() ?: return
-                drawBitmap(canvas, bitmap)
+                draw(canvas, entry)
                 drawer.unlockCanvasAndPost(canvas)
             } finally {
-                sharedBitmapPool.put(bitmap)
+                sharedBitmapPool.put(entry)
             }
         }
 
@@ -204,7 +214,7 @@ class BlurLayout @JvmOverloads constructor(
             }
         }
 
-        private fun drawBitmap(canvas: Canvas, bitmap: Bitmap) {
+        private fun draw(canvas: Canvas, entry: SharedBitmapPool.Entry) {
             if (cornerRadius > 0) {
                 canvas.save()
                 // 经过渲染的Bitmap由于缩放的关系
@@ -227,13 +237,13 @@ class BlurLayout @JvmOverloads constructor(
                     paint.apply {
                         reset()
                         isAntiAlias = true
-                        shader = loadShader(bitmap)
+                        shader = entry.shader
                     }
                 )
                 canvas.restore()
             } else {
                 canvas.drawBitmap(
-                    bitmap,
+                    entry.bitmap,
                     null,
                     drawingRect.apply {
                         set(
