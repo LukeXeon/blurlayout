@@ -28,7 +28,7 @@ internal class TransitionLayout @JvmOverloads constructor(
 
 
     override fun dispatchDraw(canvas: Canvas) {
-        if (normalized == 1f) {
+        if (normalized == 0f) {
             super.dispatchDraw(canvas)
             return
         }
