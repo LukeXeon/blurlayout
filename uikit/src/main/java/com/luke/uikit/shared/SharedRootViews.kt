@@ -20,8 +20,14 @@ internal class SharedRootViews : Application.ActivityLifecycleCallbacks {
         val rootView = activity.window.decorView as ViewGroup
         val contentView = rootView.getChildAt(0)
         if (contentView !is StackRootView) {
-            val newContentView = aaa(rootView.context)
-            aaa.transformChildViewsTo(rootView, newContentView.topView)
+            val newContentView = StackRootView(rootView.context)
+            val childView = (0 until rootView.childCount).map {
+                rootView.getChildAt(it)
+            }
+            rootView.removeAllViews()
+            childView.forEach {
+                newContentView.addView(it)
+            }
             rootView.addView(newContentView)
             activities[activity] = newContentView
         }
