@@ -12,7 +12,7 @@ internal class SharedInitializer : ContentProvider() {
         val ctx = context
         if (ctx != null) {
             val application = ctx.applicationContext as Application
-            application.registerActivityLifecycleCallbacks(contentLayouts)
+            application.registerActivityLifecycleCallbacks(rootViews)
             application.registerComponentCallbacks(bitmapPool)
         }
         return ctx != null

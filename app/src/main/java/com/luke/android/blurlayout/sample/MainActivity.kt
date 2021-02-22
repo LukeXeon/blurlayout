@@ -9,7 +9,7 @@ import android.view.WindowManager
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
-import com.luke.uikit.popup.PopupManager
+import com.luke.uikit.popup.PopupStackManager
 
 class MainActivity : AppCompatActivity() {
 
@@ -30,8 +30,16 @@ class MainActivity : AppCompatActivity() {
         }
         setContentView(R.layout.activity_main)
         button = findViewById(R.id.open_pannel)
-        button.setOnClickListener {
-            PopupManager.show(this, Fragment())
-        }
+        button.setOnClickListener(object : View.OnClickListener {
+            override fun onClick(v: View?) {
+                val l = this
+                PopupStackManager.push(
+                    this@MainActivity,
+                    layoutInflater.inflate(R.layout.activity_main, null, false).apply {
+                        findViewById<View>(R.id.open_pannel).setOnClickListener(l)
+                    }
+                )
+            }
+        })
     }
 }

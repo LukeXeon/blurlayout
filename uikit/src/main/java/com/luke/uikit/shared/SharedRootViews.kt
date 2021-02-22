@@ -5,13 +5,13 @@ import android.app.Application
 import android.os.Bundle
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
-import com.luke.uikit.popup.ContentLayout
+import com.luke.uikit.popup.StackRootView
 import java.util.*
 
-internal class SharedContentLayouts : Application.ActivityLifecycleCallbacks {
-    private val activities = WeakHashMap<AppCompatActivity, ContentLayout>()
+internal class SharedRootViews : Application.ActivityLifecycleCallbacks {
+    private val activities = WeakHashMap<AppCompatActivity, StackRootView>()
 
-    operator fun get(activity: AppCompatActivity): ContentLayout? = activities[activity]
+    operator fun get(activity: AppCompatActivity): StackRootView? = activities[activity]
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
         if (activity !is AppCompatActivity) {
@@ -19,12 +19,9 @@ internal class SharedContentLayouts : Application.ActivityLifecycleCallbacks {
         }
         val rootView = activity.window.decorView as ViewGroup
         val contentView = rootView.getChildAt(0)
-        if (contentView !is ContentLayout) {
-            val childViews = (0 until rootView.childCount)
-                .map { rootView.getChildAt(it) }
-            rootView.removeAllViews()
-            val newContentView = ContentLayout(rootView.context)
-            newContentView.setContentViews(childViews)
+        if (contentView !is StackRootView) {
+            val newContentView = aaa(rootView.context)
+            aaa.transformChildViewsTo(rootView, newContentView.topView)
             rootView.addView(newContentView)
             activities[activity] = newContentView
         }

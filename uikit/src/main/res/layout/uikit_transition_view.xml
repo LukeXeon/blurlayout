@@ -2,13 +2,13 @@
 <merge xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <com.luke.uikit.popup.TransitionLayout
+    <com.luke.uikit.popup.bbb
         android:fitsSystemWindows="true"
         android:id="@+id/transition_content"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
-    </com.luke.uikit.popup.TransitionLayout>
+    </com.luke.uikit.popup.bbb>
 
     <FrameLayout
         android:id="@+id/uikit_bottom_sheet_fragment_container"
@@ -17,6 +17,7 @@
         android:layout_marginTop="?attr/actionBarSize"
         android:background="@drawable/uikit_bottom_sheet_background"
         app:behavior_hideable="true"
+        app:behavior_skipCollapsed="true"
         app:layout_behavior="@string/bottom_sheet_behavior">
     </FrameLayout>
 </merge>

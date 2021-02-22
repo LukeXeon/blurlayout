@@ -19,15 +19,4 @@
             android:layout_height="wrap_content">
         </Button>
     </FrameLayout>
-    <com.luke.uikit.blurlayout.BlurLayout
-        android:layout_gravity="bottom"
-        app:maskColor="#BFFFFFFF"
-        android:layout_width="match_parent"
-        android:layout_height="80dp">
-        <TabHost
-            android:id="@+id/tabs"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent">
-        </TabHost>
-    </com.luke.uikit.blurlayout.BlurLayout>
 </FrameLayout>
