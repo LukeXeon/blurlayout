@@ -2,7 +2,9 @@ package com.luke.uikit.popup
 
 import android.content.Context
 import android.graphics.*
+import android.graphics.drawable.ColorDrawable
 import android.util.AttributeSet
+import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import kotlin.math.max
 import kotlin.math.min
@@ -11,12 +13,13 @@ import com.luke.uikit.R
 
 internal class TransitionLayout @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
-) : FrameLayout(context, attrs, defStyleAttr) {
+) : FrameLayout(context, attrs, defStyleAttr), ViewTreeObserver.OnPreDrawListener {
 
     private val path = Path()
     private val pathRectF = RectF()
     private val rect = Rect()
     private val paint = Paint()
+    private val backgroundBlack = ColorDrawable(Color.BLACK)
 
     var normalized: Float = 1f
         set(value) {
@@ -26,6 +29,18 @@ internal class TransitionLayout @JvmOverloads constructor(
             field = max(0f, min(1f, value))
         }
 
+    init {
+        viewTreeObserver.addOnPreDrawListener(this)
+    }
+
+    override fun onPreDraw(): Boolean {
+        background = if (normalized == 0f) {
+            null
+        } else {
+            backgroundBlack
+        }
+        return true
+    }
 
     override fun dispatchDraw(canvas: Canvas) {
         if (normalized == 0f) {

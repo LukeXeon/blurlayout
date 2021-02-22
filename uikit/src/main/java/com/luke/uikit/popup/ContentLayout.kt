@@ -35,15 +35,13 @@ internal class ContentLayout @JvmOverloads constructor(
         transitionLayout = findViewById(R.id.transition_content)
         bottomSheet = findViewById(R.id.uikit_bottom_sheet_fragment_container)
         behavior = BottomSheetBehavior.from(bottomSheet)
+        behavior.skipCollapsed = true
         behavior.addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
             override fun onSlide(bottomSheet: View, slideOffset: Float) {
                 transitionLayout.normalized = (slideOffset + 1f) / 2f
             }
 
             override fun onStateChanged(bottomSheet: View, newState: Int) {
-                if (newState == BottomSheetBehavior.STATE_HALF_EXPANDED || newState == BottomSheetBehavior.STATE_SETTLING) {
-                    behavior.state = BottomSheetBehavior.STATE_EXPANDED
-                }
             }
         })
     }

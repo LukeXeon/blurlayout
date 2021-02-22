@@ -9,6 +9,15 @@
         android:id="@+id/main_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
+        <Button
+            android:layout_gravity="center"
+            android:id="@+id/open_pannel"
+            android:text="Open"
+            android:textSize="30dp"
+            android:textColor="@android:color/black"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+        </Button>
     </FrameLayout>
     <com.luke.uikit.blurlayout.BlurLayout
         android:layout_gravity="bottom"
