@@ -76,6 +76,7 @@ class WrapLayout @JvmOverloads constructor(
                 //end a line
                 currentLineTop += childViewMaxHeight
                 currentLineTop += verticalSpacing
+                currentLineLeft = horizontalSpacing
                 childViewMaxHeight = 0
             }
         }
@@ -111,40 +112,66 @@ class WrapLayout @JvmOverloads constructor(
                     childViewMaxHeight = max(childHeight, childViewMaxHeight)
                     lines.add(childView)
                 }
-                lines.add(null)//行尾标记
+                //插入行尾标记
+                lines.add(null)
                 measuredHeight = verticalSpacing * 2 + childViewMaxHeight
             } else {
-                var childViewMaxHeight = 0
+                var currentLineHeight = 0
                 var currentLineWidth = horizontalSpacing
                 for (index in 0 until childCount) {
                     val childView = getChildAt(index)
+                    if (childView.visibility == View.GONE) {
+                        //这种case可能会缺少换行，在最后进行检查
+                        continue
+                    }
                     if (lineCount == maxLines) {
                         hiddenViews.add(childView to childView.visibility)
                         childView.visibility = View.GONE
-                        continue
-                    }
-                    if (childView.visibility == View.GONE) {
+                        //这种case可能会缺少换行，在最后进行检查
                         continue
                     }
                     measureChild(childView, widthMeasureSpec, heightMeasureSpec)
                     val childWidth = childView.measuredWidth
                     val childHeight = childView.measuredHeight
-                    childViewMaxHeight = max(childHeight, childViewMaxHeight)
                     val newCurrentLineWidth = currentLineWidth + childWidth + horizontalSpacing
+                    //判断是否需要换行
                     if (newCurrentLineWidth <= widthSize) {
                         currentLineWidth = newCurrentLineWidth
+                        currentLineHeight = max(childHeight, currentLineHeight)
                         lines.add(childView)
                     } else {
-                        measuredWidth = max(currentLineWidth, measuredWidth)
-                        measuredHeight += childViewMaxHeight + verticalSpacing
-                        lines.add(null)//行尾标记
-                        lines.add(childView)
-                        childViewMaxHeight = 0
-                        currentLineWidth = min(widthSize, horizontalSpacing + childWidth)
                         ++lineCount
+                        //插入行尾标记
+                        lines.add(null)
+                        //更新总宽
+                        measuredWidth = max(currentLineWidth, measuredWidth)
+                        //更新总高
+                        measuredHeight += currentLineHeight + verticalSpacing
+                        //判断是否是最后一行
+                        if (lineCount != maxLines) {
+                            //不是最后一行，上一行塞不下的最后一个View成为下一行的第一个View
+                            lines.add(childView)
+                            //下一行的起始宽
+                            currentLineWidth = min(widthSize, horizontalSpacing + childWidth)
+                            //下一行的起始高
+                            currentLineHeight = childHeight
+                        }
+
                     }
                 }
-                measuredHeight = verticalSpacing
+                //检查是否换行
+                if (lines.size > 0 && lines.last() != null) {
+                    //插入行尾标记
+                    lines.add(null)
+                    //更新总宽
+                    measuredWidth = maxOf(currentLineWidth, measuredWidth, horizontalSpacing * 2)
+                    //更新总高
+                    if (currentLineHeight > 0) {
+                        measuredHeight += currentLineHeight + verticalSpacing
+                    }
+                }
+                //最后加一个spacing上下对齐
+                measuredHeight += verticalSpacing
             }
         }
         measuredWidth = max(paddingStart + measuredWidth + paddingEnd, suggestedMinimumWidth)
