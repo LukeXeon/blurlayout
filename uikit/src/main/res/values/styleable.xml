@@ -5,4 +5,9 @@
         <attr name="blurRadius" format="float"/>
         <attr name="maskColor" format="color"/>
     </declare-styleable>
+    <declare-styleable name="WrapLayout">
+        <attr name="maxLines" format="integer"/>
+        <attr name="horizontalSpacing" format="dimension"/>
+        <attr name="verticalSpacing" format="dimension"/>
+    </declare-styleable>
 </resources>
