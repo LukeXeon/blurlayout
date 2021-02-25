@@ -13,63 +13,19 @@
         android:layout_height="match_parent">
 
         <com.luke.uikit.wrap.WrapLayout
-            app:horizontalSpacing="10dp"
+            app:horizontalSpacing="5dp"
             app:maxLines="3"
-            app:verticalSpacing="10dp"
+            app:verticalSpacing="5dp"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="100dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="1111111"
-                android:textColor="@android:color/black"></TextView>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="1111111"
-                android:textColor="@android:color/black"></TextView>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="11111zxczczxczxc11"
-                android:textColor="@android:color/black"></TextView>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="11111zxczczxczxc11"></TextView>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="11z   1111"
-                android:textColor="@android:color/black"></TextView>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="111z111"
-                android:textColor="@android:color/black"></TextView>
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="11111zxczczxczxc11"></TextView>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="11zxczxc11111"
-                android:textColor="@android:color/black"></TextView>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="111zzzz1111"
-                android:textColor="@android:color/black"></TextView>
+            <include layout="@layout/view_tag"/>
+            <include layout="@layout/view_tag"/>
+            <include layout="@layout/view_tag"/>
+            <include layout="@layout/view_tag"/>
+            <include layout="@layout/view_tag"/>
+            <include layout="@layout/view_tag"/>
+            <include layout="@layout/view_tag"/>
         </com.luke.uikit.wrap.WrapLayout>
 
         <Button

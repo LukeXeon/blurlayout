@@ -16,6 +16,7 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import androidx.annotation.ColorInt
+import androidx.annotation.FloatRange
 import androidx.annotation.Px
 import androidx.core.os.HandlerCompat
 import com.luke.uikit.R
@@ -32,9 +33,9 @@ class BlurLayout @JvmOverloads constructor(
 ) : FrameLayout(context, attrs, defStyleAttr), ViewTreeObserver.OnPreDrawListener {
 
     @Px
-    var cornerRadius: Float = 0f
+    var cornerRadius: Int = 0
         set(value) {
-            field = max(0f, value)
+            field = max(0, value)
         }
 
     var blurSampling: Float = 4f
@@ -42,9 +43,8 @@ class BlurLayout @JvmOverloads constructor(
             field = max(1f, value)
         }
 
-    @Px
     var blurRadius: Float = 10f
-        set(value) {
+        set(@FloatRange(from = 0.0, to = 25.0) value) {
             field = max(25f, min(0f, value))
         }
 
@@ -56,9 +56,9 @@ class BlurLayout @JvmOverloads constructor(
             val a = context.obtainStyledAttributes(
                 attrs, R.styleable.BlurLayout, defStyleAttr, 0
             )
-            cornerRadius = a.getDimension(R.styleable.BlurLayout_cornerRadius, 0f)
+            cornerRadius = a.getDimensionPixelSize(R.styleable.BlurLayout_cornerRadius, 0)
             blurSampling = a.getFloat(R.styleable.BlurLayout_blurSampling, 4f)
-            blurRadius = a.getDimension(R.styleable.BlurLayout_blurRadius, 10f)
+            blurRadius = a.getFloat(R.styleable.BlurLayout_blurRadius, 10f)
             maskColor = a.getColor(R.styleable.BlurLayout_maskColor, Color.TRANSPARENT)
             a.recycle()
         }
@@ -84,7 +84,7 @@ class BlurLayout @JvmOverloads constructor(
     private inner class DrawingTask(
         val width: Int,
         val height: Int,
-        val cornerRadius: Float,
+        val cornerRadius: Int,
         val blurSampling: Float,
         val blurRadius: Float,
         val maskColor: Int,
@@ -216,8 +216,8 @@ class BlurLayout @JvmOverloads constructor(
                             height.toFloat()
                         )
                     },
-                    cornerRadius,
-                    cornerRadius,
+                    cornerRadius.toFloat(),
+                    cornerRadius.toFloat(),
                     maskPaint.apply {
                         reset()
                         color = maskColor

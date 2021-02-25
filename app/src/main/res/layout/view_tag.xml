@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:textSize="10sp"
+    android:text="2020百大up主"
+    android:gravity="center"
+    android:paddingLeft="3dp"
+    android:paddingTop="1dp"
+    android:paddingRight="3dp"
+    android:paddingBottom="1dp"
+    android:background="@drawable/view_tag_background"
+    android:textColor="#F0900B"
+    android:layout_height="wrap_content">
+</TextView>

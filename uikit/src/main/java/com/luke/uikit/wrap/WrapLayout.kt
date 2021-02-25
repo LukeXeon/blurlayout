@@ -10,6 +10,10 @@ import com.luke.uikit.R
 import kotlin.math.max
 import kotlin.math.min
 
+/**
+ * @author luotinghui
+ * 超过最大宽度时自动换行的Layout
+ **/
 class WrapLayout @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : ViewGroup(context, attrs, defStyleAttr) {
@@ -59,8 +63,8 @@ class WrapLayout @JvmOverloads constructor(
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         var currentLineHeight = 0
-        var currentLineLeft = horizontalSpacing
-        var currentLineTop = verticalSpacing
+        var currentLineLeft = 0
+        var currentLineTop = 0
         for (view in lines) {
             if (view != null) {
                 currentLineHeight = max(view.measuredHeight, currentLineHeight)
@@ -73,10 +77,11 @@ class WrapLayout @JvmOverloads constructor(
                 currentLineLeft += view.measuredWidth
                 currentLineLeft += horizontalSpacing
             } else {
-                //end a line
+                //一行结束
                 currentLineTop += currentLineHeight
                 currentLineTop += verticalSpacing
-                currentLineLeft = horizontalSpacing
+                //重置
+                currentLineLeft = 0
                 currentLineHeight = 0
             }
         }
@@ -98,7 +103,7 @@ class WrapLayout @JvmOverloads constructor(
         if (childCount > 0) {
             if (widthMode == MeasureSpec.UNSPECIFIED) {
                 //不受限制，此模式下只有一行
-                var childViewMaxHeight = 0
+                var lineHeight = 0
                 for (index in 0 until childCount) {
                     val childView = getChildAt(index)
                     if (childView.visibility == View.GONE) {
@@ -108,16 +113,18 @@ class WrapLayout @JvmOverloads constructor(
                     val childWidth = childView.measuredWidth
                     val childHeight = childView.measuredHeight
                     measuredWidth += childWidth
-                    measuredWidth += horizontalSpacing
-                    childViewMaxHeight = max(childHeight, childViewMaxHeight)
+                    //最后一列不加
+                    if (index != childCount) {
+                        measuredWidth += horizontalSpacing
+                    }
+                    lineHeight = max(childHeight, lineHeight)
                     lines.add(childView)
                 }
                 //插入行尾标记
                 lines.add(null)
-                measuredHeight = verticalSpacing * 2 + childViewMaxHeight
             } else {
                 var currentLineHeight = 0
-                var currentLineWidth = horizontalSpacing
+                var currentLineWidth = 0
                 for (index in 0 until childCount) {
                     val childView = getChildAt(index)
                     if (childView.visibility == View.GONE) {
@@ -146,13 +153,15 @@ class WrapLayout @JvmOverloads constructor(
                         //更新总宽
                         measuredWidth = max(currentLineWidth, measuredWidth)
                         //更新总高
-                        measuredHeight += currentLineHeight + verticalSpacing
+                        measuredHeight += currentLineHeight
                         //判断是否是最后一行
                         if (lineCount != maxLines) {
+                            //不是最后一行才加
+                            measuredHeight += verticalSpacing
                             //不是最后一行，上一行塞不下的最后一个View成为下一行的第一个View
                             lines.add(childView)
                             //下一行的起始宽
-                            currentLineWidth = min(widthSize, horizontalSpacing + childWidth)
+                            currentLineWidth = min(widthSize, childWidth)
                             //下一行的起始高
                             currentLineHeight = childHeight
                         }
@@ -164,11 +173,9 @@ class WrapLayout @JvmOverloads constructor(
                     //插入行尾标记
                     lines.add(null)
                     //更新总宽
-                    measuredWidth = maxOf(currentLineWidth, measuredWidth, horizontalSpacing * 2)
+                    measuredWidth = max(currentLineWidth, measuredWidth)
                     //更新总高
-                    if (currentLineHeight > 0) {
-                        measuredHeight += currentLineHeight + verticalSpacing
-                    }
+                    measuredHeight += currentLineHeight
                 }
                 //最后加一个spacing上下对齐
                 measuredHeight += verticalSpacing
