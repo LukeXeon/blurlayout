@@ -58,12 +58,12 @@ class WrapLayout @JvmOverloads constructor(
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        var childViewMaxHeight = 0
+        var currentLineHeight = 0
         var currentLineLeft = horizontalSpacing
         var currentLineTop = verticalSpacing
         for (view in lines) {
             if (view != null) {
-                childViewMaxHeight = max(view.measuredHeight, childViewMaxHeight)
+                currentLineHeight = max(view.measuredHeight, currentLineHeight)
                 view.layout(
                     currentLineLeft,
                     currentLineTop,
@@ -74,10 +74,10 @@ class WrapLayout @JvmOverloads constructor(
                 currentLineLeft += horizontalSpacing
             } else {
                 //end a line
-                currentLineTop += childViewMaxHeight
+                currentLineTop += currentLineHeight
                 currentLineTop += verticalSpacing
                 currentLineLeft = horizontalSpacing
-                childViewMaxHeight = 0
+                currentLineHeight = 0
             }
         }
     }

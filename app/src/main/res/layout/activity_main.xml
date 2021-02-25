@@ -46,6 +46,22 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:text="11z   1111"
+                android:textColor="@android:color/black"></TextView>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="111z111"
+                android:textColor="@android:color/black"></TextView>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="11111zxczczxczxc11"></TextView>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:text="11zxczxc11111"
                 android:textColor="@android:color/black"></TextView>
 
