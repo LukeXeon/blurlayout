@@ -11,11 +11,8 @@ import android.util.TypedValue
 import android.view.View
 import android.widget.FrameLayout
 import androidx.coordinatorlayout.widget.CoordinatorLayout
-import androidx.core.content.ContextCompat
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.luke.uikit.R
-import kotlin.math.max
-import kotlin.math.min
 
 internal class StackRootView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
