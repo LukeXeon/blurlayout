@@ -8,6 +8,7 @@ import android.view.Window
 import android.view.WindowManager
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import com.luke.uikit.popup.PopupStackManager
 
@@ -37,6 +38,7 @@ class MainActivity : AppCompatActivity() {
                     this@MainActivity,
                     layoutInflater.inflate(R.layout.activity_main, null, false).apply {
                         findViewById<View>(R.id.open_pannel).setOnClickListener(l)
+                        background = ContextCompat.getDrawable(context,R.drawable.uikit_bottom_sheet_background)
                     }
                 )
             }

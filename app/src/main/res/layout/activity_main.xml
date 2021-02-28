@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        xmlns:tools="http://schemas.android.com/tools"
-        android:background="@android:color/white"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        tools:context=".MainActivity">
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/white"
+    tools:context=".MainActivity">
 
     <FrameLayout
         android:id="@+id/main_container"
@@ -13,19 +13,26 @@
         android:layout_height="match_parent">
 
         <com.luke.uikit.wrap.WrapLayout
-            app:horizontalSpacing="5dp"
-            app:maxLines="3"
-            app:verticalSpacing="5dp"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="100dp">
-            <include layout="@layout/view_tag"/>
-            <include layout="@layout/view_tag"/>
-            <include layout="@layout/view_tag"/>
-            <include layout="@layout/view_tag"/>
-            <include layout="@layout/view_tag"/>
-            <include layout="@layout/view_tag"/>
-            <include layout="@layout/view_tag"/>
+            android:layout_marginTop="100dp"
+            app:horizontalSpacing="5dp"
+            app:maxLines="3"
+            app:verticalSpacing="5dp">
+
+            <include layout="@layout/view_tag" />
+
+            <include layout="@layout/view_tag" />
+
+            <include layout="@layout/view_tag" />
+
+            <include layout="@layout/view_tag" />
+
+            <include layout="@layout/view_tag" />
+
+            <include layout="@layout/view_tag" />
+
+            <include layout="@layout/view_tag" />
         </com.luke.uikit.wrap.WrapLayout>
 
         <Button
