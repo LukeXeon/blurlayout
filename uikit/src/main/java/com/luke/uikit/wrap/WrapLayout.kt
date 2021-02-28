@@ -177,8 +177,6 @@ class WrapLayout @JvmOverloads constructor(
                     //更新总高
                     measuredHeight += currentLineHeight
                 }
-                //最后加一个spacing上下对齐
-                measuredHeight += verticalSpacing
             }
         }
         measuredWidth = max(paddingStart + measuredWidth + paddingEnd, suggestedMinimumWidth)
