@@ -21,106 +21,88 @@ internal class StackRootView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : CoordinatorLayout(context, attrs, defStyleAttr) {
 
-    private val stack = ArrayList<FrameLayout>()
-    private val callback = object : BottomSheetBehavior.BottomSheetCallback() {
-        override fun onSlide(bottomSheet: View, slideOffset: Float) {
-            normalized = slideOffset
-        }
-
-        override fun onStateChanged(bottomSheet: View, newState: Int) {
-            if (newState == BottomSheetBehavior.STATE_HIDDEN) {
-                pop()
-            }
-        }
-    }
+    private val stack = ArrayList<Pair<FrameLayout, FloatArray>>()
     private val path = Path()
     private val pathRectF = RectF()
-    private val radius = resources.getDimension(R.dimen.uikit_radius)
+    private val radius = resources.getDimensionPixelSize(R.dimen.uikit_radius)
     private val marginTop: Float
 
     init {
         background = ColorDrawable(Color.BLACK)
         val typedValue = TypedValue()
         context.theme.resolveAttribute(R.attr.actionBarSize, typedValue, true)
-        marginTop = typedValue.getDimension(resources.displayMetrics)
+        marginTop = TypedValue.complexToDimensionPixelSize(typedValue.data, resources.displayMetrics).toFloat()
     }
-
-    private var normalized: Float = 0f
-        set(value) {
-            if (value != field) {
-                invalidate()
-            }
-            field = max(0f, min(1f, value))
-        }
 
     fun push(view: View, layoutParams: FrameLayout.LayoutParams?) {
         val wrapper = FrameLayout(context)
+        wrapper.setPadding(0,marginTop.toInt(),0,0)
         wrapper.addView(view, layoutParams)
-        wrapper.background = ContextCompat.getDrawable(
-            context,
-            R.drawable.uikit_bottom_sheet_background
-        )
         val lp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+        val normalized = floatArrayOf(0f)
         val behavior = BottomSheetBehavior<FrameLayout>().apply {
             skipCollapsed = true
             isHideable = true
             state = BottomSheetBehavior.STATE_HIDDEN
+            peekHeight = BottomSheetBehavior.PEEK_HEIGHT_AUTO
+            addBottomSheetCallback(object : BottomSheetBehavior.BottomSheetCallback() {
+                override fun onSlide(bottomSheet: View, slideOffset: Float) {
+                    normalized[0] = (slideOffset + 1) / 2
+                    invalidate()
+                }
+
+                override fun onStateChanged(bottomSheet: View, newState: Int) {
+                    if (newState == BottomSheetBehavior.STATE_HIDDEN) {
+                        pop()
+                    }
+                }
+            })
         }
         lp.behavior = behavior
-        lp.topMargin = marginTop.toInt()
         addView(wrapper, lp)
         wrapper.bringToFront()
-        if (stack.size > 0) {
-            BottomSheetBehavior.from(stack.last())
-                .removeBottomSheetCallback(callback)
-        }
-        stack.add(wrapper)
-        behavior.addBottomSheetCallback(callback)
+        stack.add(wrapper to normalized)
         post { behavior.state = BottomSheetBehavior.STATE_EXPANDED }
     }
 
     fun pop() {
         if (stack.size > 0) {
             val top = stack.removeAt(stack.size - 1)
-            BottomSheetBehavior.from(top)
-                .removeBottomSheetCallback(callback)
-            top.removeAllViews()
-            removeView(top)
-            if (stack.size > 0) {
-                BottomSheetBehavior.from(stack.last())
-                    .addBottomSheetCallback(callback)
-            }
-            normalized = 1f
+            top.first.removeAllViews()
+            removeView(top.first)
         }
     }
 
-    override fun drawChild(canvas: Canvas, child: View, drawingTime: Long): Boolean {
-        val index = stack.indexOf(child)
-        if (index == stack.size - 1) {
-            return super.drawChild(canvas, child, drawingTime)
-        }
+    private companion object {
+        private const val xRate = 0.1f
+        private const val yRate = 0.05f
+        private const val scaleRate = 0.1f
+        private const val alphaRate = 0.5f
+    }
+
+    private fun drawChild(
+        canvas: Canvas,
+        child: View,
+        index: Int
+    ): Boolean {
         canvas.save()
-        //top
-        val marginTop = if (stack.size >= 1 && index == stack.size - 2) {
-            this.marginTop * stack.size - 1 * this.normalized
-        } else {
-            0f
+        var cur = stack.size - 1
+        while (cur >= index) {
+            val n = stack[cur].second[0]
+            val scale = 1 - n * scaleRate
+            val x = xRate * width / 2 * n
+            val y = yRate * height * n
+            canvas.translate(x, y)
+            if (cur != 0) {
+                canvas.translate(0f, -marginTop * n)
+            }
+            canvas.scale(scale, scale)
+            --cur
         }
-        val scale = 1 - normalized * 0.1f
-        val x = 0.1f * width / 2 * normalized
-        val y = 0.05f * height * normalized - 0f
-        canvas.translate(x, y)
-        canvas.scale(scale, scale)
-        val innerX = 0.1f * width / 2
-        val innerY = 0.05f * height
-        val innerScale = 0.9f
-        //inner
-        repeat(11) {
-            canvas.translate(innerX, innerY)
-            canvas.scale(innerScale, innerScale)
-        }
-        if (index == -1) {
-            val radius = normalized * this.radius
+
+        if (index == 0) {
+            val n = if (stack.size > 1) 1f else stack[index].second[0]
+            val radius = n * this.radius
             canvas.clipPath(path.apply {
                 reset()
                 addRoundRect(pathRectF.apply {
@@ -131,13 +113,19 @@ internal class StackRootView @JvmOverloads constructor(
         }
         val result = super.drawChild(canvas, child, drawingTime)
         canvas.restore()
-        val normalized = if (index == stack.size - 2) {
-            this.normalized
-        } else {
-            1f
-        }
-        val alpha = (0.5f * normalized * 255).toInt()
+        val n = if (index == stack.size - 1) stack[index].second[0] else 1f
+        val alpha = (alphaRate * n * 255).toInt()
         canvas.drawARGB(alpha, 0, 0, 0)
         return result
+    }
+
+    override fun drawChild(canvas: Canvas, child: View, drawingTime: Long): Boolean {
+        if (stack.size > 0) {
+            val index = stack.indexOfLast { it.first == child }
+            if (index != stack.size - 1) {
+                return drawChild(canvas, child, index + 1)
+            }
+        }
+        return super.drawChild(canvas, child, drawingTime)
     }
 }
