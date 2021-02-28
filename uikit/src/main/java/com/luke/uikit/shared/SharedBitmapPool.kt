@@ -1,6 +1,8 @@
 package com.luke.uikit.shared
 
+import android.app.Application
 import android.content.ComponentCallbacks2
+import android.content.Context
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.graphics.Bitmap
@@ -8,10 +10,12 @@ import android.graphics.BitmapShader
 import android.graphics.Shader
 import com.luke.uikit.bitmappool.LruBitmapPool
 import com.luke.uikit.bitmappool.LruPoolStrategy
+import java.util.concurrent.atomic.AtomicBoolean
 
-internal class SharedBitmapPool : ComponentCallbacks2 {
+internal object SharedBitmapPool : ComponentCallbacks2 {
     private val entries = HashMap<Bitmap, Entry>()
     private val bitmaps: LruBitmapPool
+    private val isInit = AtomicBoolean()
 
     init {
         val strategy = LruBitmapPool.getDefaultStrategy()
@@ -30,6 +34,13 @@ internal class SharedBitmapPool : ComponentCallbacks2 {
             },
             setOf(Bitmap.Config.ARGB_8888)
         )
+    }
+
+    fun init(context: Context) {
+        if (isInit.compareAndSet(false, true)) {
+            val application = context.applicationContext as Application
+            application.registerComponentCallbacks(this)
+        }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {

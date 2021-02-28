@@ -4,8 +4,8 @@
     <application>
         <provider
             android:multiprocess="true"
-            android:authorities="${applicationId}.uikit.initializer"
-            android:name=".shared.SharedInitializer"
+            android:authorities="${applicationId}.uikit.installer"
+            android:name=".popup.StackRootView$Installer"
             android:exported="false" />
     </application>
 </manifest>

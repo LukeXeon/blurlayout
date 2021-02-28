@@ -9,8 +9,7 @@ import android.view.WindowManager
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.fragment.app.Fragment
-import com.luke.uikit.popup.PopupStackManager
+import com.luke.uikit.popup.StackRootView
 
 class MainActivity : AppCompatActivity() {
 
@@ -34,7 +33,7 @@ class MainActivity : AppCompatActivity() {
         button.setOnClickListener(object : View.OnClickListener {
             override fun onClick(v: View?) {
                 val l = this
-                PopupStackManager.push(
+                StackRootView.push(
                     this@MainActivity,
                     layoutInflater.inflate(R.layout.activity_main, null, false).apply {
                         findViewById<View>(R.id.open_pannel).setOnClickListener(l)

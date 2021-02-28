@@ -1,20 +1,31 @@
 package com.luke.uikit.popup
 
+import android.app.Activity
+import android.app.Application
+import android.content.ContentProvider
+import android.content.ContentValues
 import android.content.Context
+import android.database.Cursor
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.drawable.ColorDrawable
+import android.net.Uri
+import android.os.Bundle
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.appcompat.app.AppCompatActivity
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.luke.uikit.R
+import java.util.*
+import kotlin.collections.ArrayList
 
-internal class StackRootView @JvmOverloads constructor(
+class StackRootView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : CoordinatorLayout(context, attrs, defStyleAttr) {
 
@@ -28,12 +39,14 @@ internal class StackRootView @JvmOverloads constructor(
         background = ColorDrawable(Color.BLACK)
         val typedValue = TypedValue()
         context.theme.resolveAttribute(R.attr.actionBarSize, typedValue, true)
-        marginTop = TypedValue.complexToDimensionPixelSize(typedValue.data, resources.displayMetrics).toFloat()
+        marginTop =
+            TypedValue.complexToDimensionPixelSize(typedValue.data, resources.displayMetrics)
+                .toFloat()
     }
 
     fun push(view: View, layoutParams: FrameLayout.LayoutParams?) {
         val wrapper = FrameLayout(context)
-        wrapper.setPadding(0,marginTop.toInt(),0,0)
+        wrapper.setPadding(0, marginTop.toInt(), 0, 0)
         wrapper.addView(view, layoutParams)
         val lp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         val normalized = floatArrayOf(0f)
@@ -70,11 +83,28 @@ internal class StackRootView @JvmOverloads constructor(
         }
     }
 
-    private companion object {
+    companion object {
         private const val xRate = 0.1f
         private const val yRate = 0.05f
         private const val scaleRate = 0.1f
         private const val alphaRate = 0.5f
+
+        private val activities = WeakHashMap<Activity, StackRootView>()
+
+        fun push(
+            activity: AppCompatActivity,
+            view: View,
+            layoutParams: FrameLayout.LayoutParams? = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        ) {
+            activities[activity]?.push(view, layoutParams)
+        }
+
+        fun pop(activity: AppCompatActivity) {
+            activities[activity]?.pop()
+        }
     }
 
     private fun drawChild(
@@ -124,5 +154,84 @@ internal class StackRootView @JvmOverloads constructor(
             }
         }
         return super.drawChild(canvas, child, drawingTime)
+    }
+
+    class Installer : ContentProvider(), Application.ActivityLifecycleCallbacks {
+
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+            val rootView = activity.window.decorView as ViewGroup
+            val contentView = rootView.getChildAt(0)
+            if (contentView !is StackRootView) {
+                val newContentView = StackRootView(rootView.context)
+                val childView = (0 until rootView.childCount).map {
+                    rootView.getChildAt(it)
+                }
+                rootView.removeAllViews()
+                childView.forEach {
+                    newContentView.addView(it)
+                }
+                rootView.addView(newContentView)
+                activities[activity] = newContentView
+            }
+        }
+
+        override fun onActivityStarted(activity: Activity) {
+        }
+
+        override fun onActivityResumed(activity: Activity) {
+        }
+
+        override fun onActivityPaused(activity: Activity) {
+        }
+
+        override fun onActivityStopped(activity: Activity) {
+        }
+
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {
+        }
+
+        override fun onActivityDestroyed(activity: Activity) {
+            activities.remove(activity)
+        }
+
+        override fun onCreate(): Boolean {
+            val ctx = context
+            if (ctx != null) {
+                val application = ctx.applicationContext as Application
+                application.registerActivityLifecycleCallbacks(this)
+            }
+            return ctx != null
+        }
+
+        override fun query(
+            uri: Uri,
+            projection: Array<out String>?,
+            selection: String?,
+            selectionArgs: Array<out String>?,
+            sortOrder: String?
+        ): Cursor? {
+            return null
+        }
+
+        override fun getType(uri: Uri): String? {
+            return null
+        }
+
+        override fun insert(uri: Uri, values: ContentValues?): Uri? {
+            return null
+        }
+
+        override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int {
+            return 0
+        }
+
+        override fun update(
+            uri: Uri,
+            values: ContentValues?,
+            selection: String?,
+            selectionArgs: Array<out String>?
+        ): Int {
+            return 0
+        }
     }
 }

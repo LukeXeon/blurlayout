@@ -21,7 +21,6 @@ import androidx.annotation.Px
 import androidx.core.os.HandlerCompat
 import com.luke.uikit.R
 import com.luke.uikit.shared.SharedBitmapPool
-import com.luke.uikit.shared.bitmapPool
 import kotlin.math.max
 import kotlin.math.min
 
@@ -52,6 +51,7 @@ class BlurLayout @JvmOverloads constructor(
     var maskColor: Int = Color.TRANSPARENT
 
     init {
+        SharedBitmapPool.init(context)
         if (attrs != null) {
             val a = context.obtainStyledAttributes(
                 attrs, R.styleable.BlurLayout, defStyleAttr, 0
@@ -93,7 +93,7 @@ class BlurLayout @JvmOverloads constructor(
         override fun run() {
             val scaledWidth = (width / blurSampling).toInt()
             val scaledHeight = (height / blurSampling).toInt()
-            val entry = bitmapPool[scaledWidth, scaledHeight]
+            val entry = SharedBitmapPool[scaledWidth, scaledHeight]
             val bitmap = entry.bitmap
             // 在后台慢慢用软件画图来画，防止主线程卡住
             // 因为软件绘制实在是太慢了
@@ -106,7 +106,7 @@ class BlurLayout @JvmOverloads constructor(
                     backgroundCanvas.drawPicture(recorder)
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    bitmapPool.put(entry)
+                    SharedBitmapPool.put(entry)
                     return
                 } finally {
                     backgroundCanvas.restore()
@@ -120,7 +120,7 @@ class BlurLayout @JvmOverloads constructor(
                 draw(canvas, entry)
                 drawer.unlockCanvasAndPost(canvas)
             } finally {
-                bitmapPool.put(entry)
+                SharedBitmapPool.put(entry)
             }
         }
 
