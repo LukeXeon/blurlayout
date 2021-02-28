@@ -14,7 +14,6 @@ import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import androidx.appcompat.app.AppCompatActivity
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.luke.uikit.R
@@ -29,20 +28,20 @@ class StackRootView @JvmOverloads constructor(
     private val path = Path()
     private val pathRectF = RectF()
     private val radius = resources.getDimensionPixelSize(R.dimen.uikit_radius)
-    private val marginTop: Float
+    private val topHeight: Float
 
     init {
         background = ColorDrawable(Color.BLACK)
         val typedValue = TypedValue()
         context.theme.resolveAttribute(R.attr.actionBarSize, typedValue, true)
-        marginTop =
-            TypedValue.complexToDimensionPixelSize(typedValue.data, resources.displayMetrics)
-                .toFloat()
+        topHeight = TypedValue.complexToDimensionPixelSize(
+            typedValue.data, resources.displayMetrics
+        ).toFloat()
     }
 
     fun push(view: View, layoutParams: FrameLayout.LayoutParams?) {
         val wrapper = FrameLayout(context)
-        wrapper.setPadding(0, marginTop.toInt(), 0, 0)
+        wrapper.setPadding(0, topHeight.toInt(), 0, 0)
         wrapper.addView(view, layoutParams)
         val lp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         val normalized = floatArrayOf(0f)
@@ -92,16 +91,16 @@ class StackRootView @JvmOverloads constructor(
             val rootView = activity.window.decorView as ViewGroup
             val contentView = rootView.getChildAt(0)
             if (contentView !is StackRootView) {
-                val newContentView = StackRootView(rootView.context)
+                val stackRootView = StackRootView(rootView.context)
                 val childView = (0 until rootView.childCount).map {
                     rootView.getChildAt(it)
                 }
                 rootView.removeAllViews()
-                childView.forEach {
-                    newContentView.addView(it)
+                for (it in childView) {
+                    stackRootView.addView(it)
                 }
-                rootView.addView(newContentView)
-                activities[activity] = newContentView
+                rootView.addView(stackRootView)
+                activities[activity] = stackRootView
             }
         }
 
@@ -131,7 +130,7 @@ class StackRootView @JvmOverloads constructor(
         }
 
         fun push(
-            activity: AppCompatActivity,
+            activity: Activity,
             view: View,
             layoutParams: FrameLayout.LayoutParams? = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -141,7 +140,7 @@ class StackRootView @JvmOverloads constructor(
             activities[activity]?.push(view, layoutParams)
         }
 
-        fun pop(activity: AppCompatActivity) {
+        fun pop(activity: Activity) {
             activities[activity]?.pop()
         }
     }
@@ -160,7 +159,7 @@ class StackRootView @JvmOverloads constructor(
             val y = yRate * height * n
             canvas.translate(x, y)
             if (cur != 0) {
-                canvas.translate(0f, -marginTop * n)
+                canvas.translate(0f, -topHeight * n)
             }
             canvas.scale(scale, scale)
             --cur
