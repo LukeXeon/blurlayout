@@ -2,16 +2,12 @@ package com.luke.uikit.popup
 
 import android.app.Activity
 import android.app.Application
-import android.content.ContentProvider
-import android.content.ContentValues
 import android.content.Context
-import android.database.Cursor
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.drawable.ColorDrawable
-import android.net.Uri
 import android.os.Bundle
 import android.util.AttributeSet
 import android.util.TypedValue
@@ -83,13 +79,56 @@ class StackRootView @JvmOverloads constructor(
         }
     }
 
-    companion object {
+    companion object : Application.ActivityLifecycleCallbacks {
         private const val xRate = 0.1f
         private const val yRate = 0.05f
         private const val scaleRate = 0.1f
         private const val alphaRate = 0.5f
 
         private val activities = WeakHashMap<Activity, StackRootView>()
+
+        @Deprecated("", level = DeprecationLevel.HIDDEN)
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+            val rootView = activity.window.decorView as ViewGroup
+            val contentView = rootView.getChildAt(0)
+            if (contentView !is StackRootView) {
+                val newContentView = StackRootView(rootView.context)
+                val childView = (0 until rootView.childCount).map {
+                    rootView.getChildAt(it)
+                }
+                rootView.removeAllViews()
+                childView.forEach {
+                    newContentView.addView(it)
+                }
+                rootView.addView(newContentView)
+                activities[activity] = newContentView
+            }
+        }
+
+        @Deprecated("", level = DeprecationLevel.HIDDEN)
+        override fun onActivityStarted(activity: Activity) {
+        }
+
+        @Deprecated("", level = DeprecationLevel.HIDDEN)
+        override fun onActivityResumed(activity: Activity) {
+        }
+
+        @Deprecated("", level = DeprecationLevel.HIDDEN)
+        override fun onActivityPaused(activity: Activity) {
+        }
+
+        @Deprecated("", level = DeprecationLevel.HIDDEN)
+        override fun onActivityStopped(activity: Activity) {
+        }
+
+        @Deprecated("", level = DeprecationLevel.HIDDEN)
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {
+        }
+
+        @Deprecated("", level = DeprecationLevel.HIDDEN)
+        override fun onActivityDestroyed(activity: Activity) {
+            activities.remove(activity)
+        }
 
         fun push(
             activity: AppCompatActivity,
@@ -154,84 +193,5 @@ class StackRootView @JvmOverloads constructor(
             }
         }
         return super.drawChild(canvas, child, drawingTime)
-    }
-
-    class Installer : ContentProvider(), Application.ActivityLifecycleCallbacks {
-
-        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
-            val rootView = activity.window.decorView as ViewGroup
-            val contentView = rootView.getChildAt(0)
-            if (contentView !is StackRootView) {
-                val newContentView = StackRootView(rootView.context)
-                val childView = (0 until rootView.childCount).map {
-                    rootView.getChildAt(it)
-                }
-                rootView.removeAllViews()
-                childView.forEach {
-                    newContentView.addView(it)
-                }
-                rootView.addView(newContentView)
-                activities[activity] = newContentView
-            }
-        }
-
-        override fun onActivityStarted(activity: Activity) {
-        }
-
-        override fun onActivityResumed(activity: Activity) {
-        }
-
-        override fun onActivityPaused(activity: Activity) {
-        }
-
-        override fun onActivityStopped(activity: Activity) {
-        }
-
-        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {
-        }
-
-        override fun onActivityDestroyed(activity: Activity) {
-            activities.remove(activity)
-        }
-
-        override fun onCreate(): Boolean {
-            val ctx = context
-            if (ctx != null) {
-                val application = ctx.applicationContext as Application
-                application.registerActivityLifecycleCallbacks(this)
-            }
-            return ctx != null
-        }
-
-        override fun query(
-            uri: Uri,
-            projection: Array<out String>?,
-            selection: String?,
-            selectionArgs: Array<out String>?,
-            sortOrder: String?
-        ): Cursor? {
-            return null
-        }
-
-        override fun getType(uri: Uri): String? {
-            return null
-        }
-
-        override fun insert(uri: Uri, values: ContentValues?): Uri? {
-            return null
-        }
-
-        override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int {
-            return 0
-        }
-
-        override fun update(
-            uri: Uri,
-            values: ContentValues?,
-            selection: String?,
-            selectionArgs: Array<out String>?
-        ): Int {
-            return 0
-        }
     }
 }

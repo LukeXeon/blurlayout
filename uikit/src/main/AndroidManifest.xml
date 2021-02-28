@@ -5,7 +5,7 @@
         <provider
             android:multiprocess="true"
             android:authorities="${applicationId}.uikit.installer"
-            android:name=".popup.StackRootView$Installer"
+            android:name=".shared.LibraryInstaller"
             android:exported="false" />
     </application>
 </manifest>

@@ -20,7 +20,7 @@ import androidx.annotation.FloatRange
 import androidx.annotation.Px
 import androidx.core.os.HandlerCompat
 import com.luke.uikit.R
-import com.luke.uikit.shared.SharedBitmapPool
+import com.luke.uikit.shared.BitmapCache
 import kotlin.math.max
 import kotlin.math.min
 
@@ -51,7 +51,6 @@ class BlurLayout @JvmOverloads constructor(
     var maskColor: Int = Color.TRANSPARENT
 
     init {
-        SharedBitmapPool.init(context)
         if (attrs != null) {
             val a = context.obtainStyledAttributes(
                 attrs, R.styleable.BlurLayout, defStyleAttr, 0
@@ -93,7 +92,7 @@ class BlurLayout @JvmOverloads constructor(
         override fun run() {
             val scaledWidth = (width / blurSampling).toInt()
             val scaledHeight = (height / blurSampling).toInt()
-            val entry = SharedBitmapPool[scaledWidth, scaledHeight]
+            val entry = BitmapCache[scaledWidth, scaledHeight]
             val bitmap = entry.bitmap
             // 在后台慢慢用软件画图来画，防止主线程卡住
             // 因为软件绘制实在是太慢了
@@ -106,7 +105,7 @@ class BlurLayout @JvmOverloads constructor(
                     backgroundCanvas.drawPicture(recorder)
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    SharedBitmapPool.put(entry)
+                    BitmapCache.put(entry)
                     return
                 } finally {
                     backgroundCanvas.restore()
@@ -120,7 +119,7 @@ class BlurLayout @JvmOverloads constructor(
                 draw(canvas, entry)
                 drawer.unlockCanvasAndPost(canvas)
             } finally {
-                SharedBitmapPool.put(entry)
+                BitmapCache.put(entry)
             }
         }
 
@@ -144,7 +143,7 @@ class BlurLayout @JvmOverloads constructor(
             }
         }
 
-        private fun draw(canvas: Canvas, entry: SharedBitmapPool.Entry) {
+        private fun draw(canvas: Canvas, entry: BitmapCache.Entry) {
             if (cornerRadius > 0) {
                 canvas.save()
                 // 经过渲染的Bitmap由于缩放的关系
