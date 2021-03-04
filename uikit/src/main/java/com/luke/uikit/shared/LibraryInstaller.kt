@@ -13,7 +13,7 @@ class LibraryInstaller : ContentProvider() {
         val ctx = context
         if (ctx != null) {
             val application = ctx.applicationContext as Application
-            application.registerActivityLifecycleCallbacks(StackRootView)
+            application.registerActivityLifecycleCallbacks(StackRootView.ActivityRegister)
             application.registerComponentCallbacks(BitmapCache)
         }
         return ctx != null

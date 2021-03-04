@@ -78,15 +78,8 @@ class StackRootView @JvmOverloads constructor(
         }
     }
 
-    companion object : Application.ActivityLifecycleCallbacks {
-        private const val xRate = 0.1f
-        private const val yRate = 0.05f
-        private const val scaleRate = 0.1f
-        private const val alphaRate = 0.5f
+    internal object ActivityRegister : Application.ActivityLifecycleCallbacks {
 
-        private val activities = WeakHashMap<Activity, StackRootView>()
-
-        @Deprecated("", level = DeprecationLevel.HIDDEN)
         override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
             val rootView = activity.window.decorView as ViewGroup
             val contentView = rootView.getChildAt(0)
@@ -104,30 +97,33 @@ class StackRootView @JvmOverloads constructor(
             }
         }
 
-        @Deprecated("", level = DeprecationLevel.HIDDEN)
         override fun onActivityStarted(activity: Activity) {
         }
 
-        @Deprecated("", level = DeprecationLevel.HIDDEN)
         override fun onActivityResumed(activity: Activity) {
         }
 
-        @Deprecated("", level = DeprecationLevel.HIDDEN)
         override fun onActivityPaused(activity: Activity) {
         }
 
-        @Deprecated("", level = DeprecationLevel.HIDDEN)
         override fun onActivityStopped(activity: Activity) {
         }
 
-        @Deprecated("", level = DeprecationLevel.HIDDEN)
         override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {
         }
 
-        @Deprecated("", level = DeprecationLevel.HIDDEN)
         override fun onActivityDestroyed(activity: Activity) {
             activities.remove(activity)
         }
+    }
+
+    companion object {
+        private const val xRate = 0.1f
+        private const val yRate = 0.05f
+        private const val scaleRate = 0.1f
+        private const val alphaRate = 0.5f
+
+        private val activities = WeakHashMap<Activity, StackRootView>()
 
         fun push(
             activity: Activity,
