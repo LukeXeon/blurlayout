@@ -9,7 +9,7 @@ import android.graphics.Shader
 import com.luke.uikit.bitmappool.LruBitmapPool
 import com.luke.uikit.bitmappool.LruPoolStrategy
 
-internal open class BitmapCache private constructor() : ComponentCallbacks2 {
+internal object BitmapCache : ComponentCallbacks2 {
     private val entries = HashMap<Bitmap, Entry>()
     private val bitmaps: LruBitmapPool
 
@@ -60,6 +60,4 @@ internal open class BitmapCache private constructor() : ComponentCallbacks2 {
             )
         }
     }
-
-    companion object : BitmapCache()
 }
