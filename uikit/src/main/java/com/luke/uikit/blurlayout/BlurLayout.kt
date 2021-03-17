@@ -11,8 +11,6 @@ import android.renderscript.RenderScript
 import android.renderscript.ScriptIntrinsicBlur
 import android.util.AttributeSet
 import android.view.TextureView
-import android.view.View
-import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import androidx.annotation.ColorInt
@@ -20,7 +18,9 @@ import androidx.annotation.FloatRange
 import androidx.annotation.Px
 import androidx.core.os.HandlerCompat
 import com.luke.uikit.R
-import com.luke.uikit.shared.BitmapCache
+import com.luke.uikit.internal.BitmapCache
+import com.luke.uikit.internal.hasOtherDirty
+import com.luke.uikit.internal.isStackRootEmpty
 import kotlin.math.max
 import kotlin.math.min
 
@@ -55,28 +55,11 @@ class BlurLayout @JvmOverloads constructor(
             val a = context.obtainStyledAttributes(
                 attrs, R.styleable.BlurLayout, defStyleAttr, 0
             )
-            cornerRadius = a.getDimensionPixelSize(R.styleable.BlurLayout_cornerRadius, 0)
-            blurSampling = a.getFloat(R.styleable.BlurLayout_blurSampling, 4f)
-            blurRadius = a.getFloat(R.styleable.BlurLayout_blurRadius, 10f)
-            maskColor = a.getColor(R.styleable.BlurLayout_maskColor, Color.TRANSPARENT)
+            cornerRadius = a.getDimensionPixelSize(R.styleable.BlurLayout_uikit_cornerRadius, 0)
+            blurSampling = a.getFloat(R.styleable.BlurLayout_uikit_blurSampling, 4f)
+            blurRadius = a.getFloat(R.styleable.BlurLayout_uikit_blurRadius, 10f)
+            maskColor = a.getColor(R.styleable.BlurLayout_uikit_maskColor, Color.TRANSPARENT)
             a.recycle()
-        }
-    }
-
-    private fun hasOtherDirty(view: View): Boolean {
-        val p = view.parent as? ViewGroup
-        return if (p == null) {
-            false
-        } else {
-            val hasOther = (0 until p.childCount).any {
-                val v = p.getChildAt(it)
-                v != view && v.isDirty
-            }
-            if (hasOther) {
-                true
-            } else {
-                hasOtherDirty(p)
-            }
         }
     }
 
@@ -143,7 +126,7 @@ class BlurLayout @JvmOverloads constructor(
             }
         }
 
-        private fun draw(canvas: Canvas, entry: BitmapCache.Entry) {
+        private fun draw(canvas: Canvas, item: BitmapCache.Item) {
             if (cornerRadius > 0) {
                 canvas.save()
                 // 经过渲染的Bitmap由于缩放的关系
@@ -167,7 +150,7 @@ class BlurLayout @JvmOverloads constructor(
                         reset()
                         isFilterBitmap = true
                         isAntiAlias = true
-                        shader = entry.shader
+                        shader = item.shader
                     }
                 )
                 canvas.drawRoundRect(
@@ -190,7 +173,7 @@ class BlurLayout @JvmOverloads constructor(
                 canvas.restore()
             } else {
                 canvas.drawBitmap(
-                    entry.bitmap,
+                    item.bitmap,
                     null,
                     drawingRect.apply {
                         set(
@@ -255,6 +238,9 @@ class BlurLayout @JvmOverloads constructor(
     private var recordingCanvas: Canvas? = null
 
     override fun onPreDraw(): Boolean {
+        if (!isStackRootEmpty(this)) {
+            return true
+        }
         if (!isDirty || hasOtherDirty(this)) {
             getGlobalVisibleRect(visibleRect)
             val width = visibleRect.width()

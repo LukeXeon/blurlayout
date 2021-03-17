@@ -7,13 +7,10 @@ import android.view.ViewGroup
 import androidx.annotation.IntRange
 import androidx.annotation.Px
 import com.luke.uikit.R
+import java.util.*
 import kotlin.math.max
 import kotlin.math.min
 
-/**
- * @author luotinghui
- * 超过最大宽度时自动换行的Layout
- **/
 class WrapLayout @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : ViewGroup(context, attrs, defStyleAttr) {
@@ -47,16 +44,16 @@ class WrapLayout @JvmOverloads constructor(
         }
 
     private val lines = ArrayList<View?>()
-    private val hiddenViews = ArrayList<Pair<View, Int>>()
+    private val hiddenViews = WeakHashMap<View, Int>()
 
     init {
         if (attrs != null) {
             val typedArray = context.obtainStyledAttributes(attrs, R.styleable.WrapLayout)
-            maxLines = typedArray.getInt(R.styleable.WrapLayout_maxLines, 1)
+            maxLines = typedArray.getInt(R.styleable.WrapLayout_uikit_maxLines, 1)
             horizontalSpacing =
-                typedArray.getDimensionPixelSize(R.styleable.WrapLayout_horizontalSpacing, 0)
+                typedArray.getDimensionPixelSize(R.styleable.WrapLayout_uikit_horizontalSpacing, 0)
             verticalSpacing =
-                typedArray.getDimensionPixelSize(R.styleable.WrapLayout_verticalSpacing, 0)
+                typedArray.getDimensionPixelSize(R.styleable.WrapLayout_uikit_verticalSpacing, 0)
             typedArray.recycle()
         }
     }
@@ -89,8 +86,8 @@ class WrapLayout @JvmOverloads constructor(
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         for (entry in hiddenViews) {
-            if (entry.first.parent == this) {
-                entry.first.visibility = entry.second
+            if (entry.key.parent == this) {
+                entry.key.visibility = entry.value
             }
         }
         lines.clear()
@@ -132,7 +129,7 @@ class WrapLayout @JvmOverloads constructor(
                         continue
                     }
                     if (lineCount == maxLines) {
-                        hiddenViews.add(childView to childView.visibility)
+                        hiddenViews[childView] = childView.visibility
                         childView.visibility = View.GONE
                         //这种case可能会缺少换行，在最后进行检查
                         continue

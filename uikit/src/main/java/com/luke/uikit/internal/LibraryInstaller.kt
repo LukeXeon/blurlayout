@@ -1,13 +1,15 @@
-package com.luke.uikit.shared
+package com.luke.uikit.internal
 
 import android.app.Application
 import android.content.ContentProvider
 import android.content.ContentValues
 import android.database.Cursor
 import android.net.Uri
-import com.luke.uikit.popup.StackRootView
+import androidx.annotation.Keep
+import com.luke.uikit.stack.StackRootView
 
-class LibraryInstaller : ContentProvider() {
+@Keep
+internal class LibraryInstaller : ContentProvider() {
 
     override fun onCreate(): Boolean {
         val ctx = context

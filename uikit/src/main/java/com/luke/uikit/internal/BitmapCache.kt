@@ -1,4 +1,4 @@
-package com.luke.uikit.shared
+package com.luke.uikit.internal
 
 import android.content.ComponentCallbacks2
 import android.content.res.Configuration
@@ -8,9 +8,10 @@ import android.graphics.BitmapShader
 import android.graphics.Shader
 import com.luke.uikit.bitmappool.LruBitmapPool
 import com.luke.uikit.bitmappool.LruPoolStrategy
+import java.util.*
 
 internal object BitmapCache : ComponentCallbacks2 {
-    private val entries = HashMap<Bitmap, Entry>()
+    private val entries = HashMap<Bitmap, Item>()
     private val bitmaps: LruBitmapPool
 
     init {
@@ -40,18 +41,18 @@ internal object BitmapCache : ComponentCallbacks2 {
         bitmaps.trimMemory(level)
     }
 
-    operator fun get(width: Int, height: Int): Entry {
+    operator fun get(width: Int, height: Int): Item {
         val bitmap = bitmaps.getDirty(width, height, Bitmap.Config.ARGB_8888)
         return synchronized(entries) {
-            entries.getOrPut(bitmap) { Entry(bitmap) }
+            entries.getOrPut(bitmap) { Item(bitmap) }
         }
     }
 
-    fun put(entry: Entry) {
-        bitmaps.put(entry.bitmap)
+    fun put(item: Item) {
+        bitmaps.put(item.bitmap)
     }
 
-    class Entry(val bitmap: Bitmap) {
+    class Item(val bitmap: Bitmap) {
         val shader by lazy {
             BitmapShader(
                 bitmap,

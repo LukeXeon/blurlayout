@@ -1,13 +1,20 @@
 <resources>
     <declare-styleable name="BlurLayout">
-        <attr name="cornerRadius" format="dimension"/>
-        <attr name="blurSampling" format="float"/>
-        <attr name="blurRadius" format="float"/>
-        <attr name="maskColor" format="color"/>
+        <attr name="uikit_cornerRadius" format="dimension" />
+        <attr name="uikit_blurSampling" format="float" />
+        <attr name="uikit_blurRadius" format="float" />
+        <attr name="uikit_maskColor" format="color" />
     </declare-styleable>
     <declare-styleable name="WrapLayout">
-        <attr name="maxLines" format="integer"/>
-        <attr name="horizontalSpacing" format="dimension"/>
-        <attr name="verticalSpacing" format="dimension"/>
+        <attr name="uikit_maxLines" format="integer" />
+        <attr name="uikit_horizontalSpacing" format="dimension" />
+        <attr name="uikit_verticalSpacing" format="dimension" />
+    </declare-styleable>
+    <declare-styleable name="ShadowLayout"/>
+    <declare-styleable name="ShadowLayout_Layout">
+        <attr name="uikit_shadowElevation" format="dimension" />
+        <attr name="uikit_shadowRadius" format="dimension" />
+        <attr name="uikit_shadowCornerRadius" format="dimension" />
+        <attr name="uikit_shadowColor" format="color" />
     </declare-styleable>
 </resources>

@@ -19,6 +19,8 @@ package com.luke.uikit.bitmappool;
 
 import android.graphics.Bitmap;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Created by amitshekhar on 17/06/16.
  */
@@ -59,6 +61,7 @@ public class AttributeStrategy implements LruPoolStrategy {
         return Util.getBitmapByteSize(bitmap);
     }
 
+    @NotNull
     @Override
     public String toString() {
         return "AttributeStrategy:\n  " + groupedMap;

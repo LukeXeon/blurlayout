@@ -1,4 +1,4 @@
-package com.luke.uikit.popup
+package com.luke.uikit.stack
 
 import android.app.Activity
 import android.app.Application
@@ -18,7 +18,6 @@ import androidx.coordinatorlayout.widget.CoordinatorLayout
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.luke.uikit.R
 import java.util.*
-import kotlin.collections.ArrayList
 
 class StackRootView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
@@ -29,6 +28,9 @@ class StackRootView @JvmOverloads constructor(
     private val pathRectF = RectF()
     private val radius = resources.getDimensionPixelSize(R.dimen.uikit_radius)
     private val topHeight: Float
+
+    internal val isStackEmpty: Boolean
+        get() = stack.isEmpty()
 
     init {
         background = ColorDrawable(Color.BLACK)
