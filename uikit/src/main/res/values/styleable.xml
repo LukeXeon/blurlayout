@@ -13,7 +13,6 @@
     <declare-styleable name="ShadowLayout"/>
     <declare-styleable name="ShadowLayout_Layout">
         <attr name="uikit_shadowElevation" format="dimension" />
-        <attr name="uikit_shadowRadius" format="dimension" />
         <attr name="uikit_shadowCornerRadius" format="dimension" />
         <attr name="uikit_shadowColor" format="color" />
     </declare-styleable>
