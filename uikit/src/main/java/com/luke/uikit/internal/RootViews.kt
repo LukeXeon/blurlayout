@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.Application
 import android.os.Bundle
 import android.view.ViewGroup
+import androidx.appcompat.app.AppCompatActivity
 import com.luke.uikit.stack.StackRootView
 import java.util.*
 
@@ -25,6 +26,12 @@ internal object RootViews : Application.ActivityLifecycleCallbacks {
             }
             rootView.addView(stackRootView)
             activities[activity] = stackRootView
+            if (activity is AppCompatActivity) {
+                activity.onBackPressedDispatcher.addCallback(
+                    activity,
+                    stackRootView.onBackPressedCallback
+                )
+            }
         }
     }
 

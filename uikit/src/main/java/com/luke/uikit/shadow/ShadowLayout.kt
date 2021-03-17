@@ -6,7 +6,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
 import android.util.AttributeSet
-import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.FrameLayout
@@ -48,7 +47,7 @@ class ShadowLayout @JvmOverloads constructor(
             val drawable = drawableCache[index]
             val layoutParams = child.layoutParams
             if (layoutParams is LayoutParams) {
-                child.getGlobalVisibleRect(rect)
+                child.getHitRect(rect)
                 drawable.setCornerSize(layoutParams.cornerRadius)
                 drawable.elevation = layoutParams.shadowElevation
                 drawable.setShadowColor(layoutParams.shadowColor)

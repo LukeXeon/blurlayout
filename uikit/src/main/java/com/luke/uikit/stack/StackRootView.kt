@@ -11,6 +11,7 @@ import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.View
 import android.widget.FrameLayout
+import androidx.activity.OnBackPressedCallback
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.luke.uikit.R
@@ -26,6 +27,12 @@ class StackRootView @JvmOverloads constructor(
     private val pathRectF = RectF()
     private val radius = resources.getDimensionPixelSize(R.dimen.uikit_radius)
     private val topHeight: Float
+
+    internal val onBackPressedCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            pop()
+        }
+    }
 
     internal val isStackEmpty: Boolean
         get() = stack.isEmpty()
@@ -43,6 +50,7 @@ class StackRootView @JvmOverloads constructor(
         val wrapper = FrameLayout(context)
         wrapper.setPadding(0, topHeight.toInt(), 0, 0)
         wrapper.addView(view, layoutParams)
+        wrapper.isClickable = true
         val lp = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         val normalized = floatArrayOf(0f)
         val behavior = BottomSheetBehavior<FrameLayout>().apply {
@@ -57,8 +65,13 @@ class StackRootView @JvmOverloads constructor(
                 }
 
                 override fun onStateChanged(bottomSheet: View, newState: Int) {
-                    if (newState == BottomSheetBehavior.STATE_HIDDEN) {
-                        pop()
+                    if (newState == BottomSheetBehavior.STATE_HIDDEN && stack.size > 0) {
+                        val top = stack.removeAt(stack.size - 1)
+                        top.first.removeAllViews()
+                        removeView(top.first)
+                        if (isStackEmpty) {
+                            onBackPressedCallback.isEnabled = false
+                        }
                     }
                 }
             })
@@ -68,13 +81,12 @@ class StackRootView @JvmOverloads constructor(
         wrapper.bringToFront()
         stack.add(wrapper to normalized)
         post { behavior.state = BottomSheetBehavior.STATE_EXPANDED }
+        onBackPressedCallback.isEnabled = true
     }
 
-    fun pop() {
+    private fun pop() {
         if (stack.size > 0) {
-            val top = stack.removeAt(stack.size - 1)
-            top.first.removeAllViews()
-            removeView(top.first)
+            BottomSheetBehavior.from(stack.last().first).state = BottomSheetBehavior.STATE_HIDDEN
         }
     }
 
