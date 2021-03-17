@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
 import android.util.AttributeSet
+import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.FrameLayout
@@ -27,7 +28,7 @@ class ShadowLayout @JvmOverloads constructor(
         super.setClipChildren(false)
     }
 
-    override fun dispatchDraw(canvas: Canvas) {
+    private fun updateCache() {
         if (childCount > drawableCache.size) {
             drawableCache.ensureCapacity(childCount)
             while (childCount > drawableCache.size) {
@@ -52,8 +53,18 @@ class ShadowLayout @JvmOverloads constructor(
                 drawable.elevation = layoutParams.shadowElevation
                 drawable.setShadowColor(layoutParams.shadowColor)
                 drawable.bounds = rect
-                drawable.draw(canvas)
             }
+        }
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        updateCache()
+        super.onLayout(changed, left, top, right, bottom)
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        for (index in 0 until drawableCache.size) {
+            drawableCache[index].draw(canvas)
         }
         super.dispatchDraw(canvas)
     }
