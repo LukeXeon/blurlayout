@@ -6,7 +6,6 @@ import android.content.ContentValues
 import android.database.Cursor
 import android.net.Uri
 import androidx.annotation.Keep
-import com.luke.uikit.stack.StackRootView
 
 @Keep
 internal class LibraryInstaller : ContentProvider() {
@@ -15,7 +14,7 @@ internal class LibraryInstaller : ContentProvider() {
         val ctx = context
         if (ctx != null) {
             val application = ctx.applicationContext as Application
-            application.registerActivityLifecycleCallbacks(StackRootView.ActivityRegister)
+            application.registerActivityLifecycleCallbacks(RootViews)
             application.registerComponentCallbacks(BitmapCache)
         }
         return ctx != null

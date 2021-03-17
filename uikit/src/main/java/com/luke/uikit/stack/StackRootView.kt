@@ -1,22 +1,20 @@
 package com.luke.uikit.stack
 
 import android.app.Activity
-import android.app.Application
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.drawable.ColorDrawable
-import android.os.Bundle
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.View
-import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.luke.uikit.R
+import com.luke.uikit.internal.RootViews
 import java.util.*
 
 class StackRootView @JvmOverloads constructor(
@@ -80,52 +78,11 @@ class StackRootView @JvmOverloads constructor(
         }
     }
 
-    internal object ActivityRegister : Application.ActivityLifecycleCallbacks {
-
-        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
-            val rootView = activity.window.decorView as ViewGroup
-            val contentView = rootView.getChildAt(0)
-            if (contentView !is StackRootView) {
-                val stackRootView = StackRootView(rootView.context)
-                val childView = (0 until rootView.childCount).map {
-                    rootView.getChildAt(it)
-                }
-                rootView.removeAllViews()
-                for (it in childView) {
-                    stackRootView.addView(it)
-                }
-                rootView.addView(stackRootView)
-                activities[activity] = stackRootView
-            }
-        }
-
-        override fun onActivityStarted(activity: Activity) {
-        }
-
-        override fun onActivityResumed(activity: Activity) {
-        }
-
-        override fun onActivityPaused(activity: Activity) {
-        }
-
-        override fun onActivityStopped(activity: Activity) {
-        }
-
-        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {
-        }
-
-        override fun onActivityDestroyed(activity: Activity) {
-            activities.remove(activity)
-        }
-    }
-
     companion object {
         private const val xRate = 0.1f
         private const val yRate = 0.05f
         private const val scaleRate = 0.1f
         private const val alphaRate = 0.5f
-
-        private val activities = WeakHashMap<Activity, StackRootView>()
 
         fun push(
             activity: Activity,
@@ -135,11 +92,11 @@ class StackRootView @JvmOverloads constructor(
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         ) {
-            activities[activity]?.push(view, layoutParams)
+            RootViews.activities[activity]?.push(view, layoutParams)
         }
 
         fun pop(activity: Activity) {
-            activities[activity]?.pop()
+            RootViews.activities[activity]?.pop()
         }
     }
 
