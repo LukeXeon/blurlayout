@@ -20,7 +20,7 @@ import androidx.core.os.HandlerCompat
 import com.luke.uikit.R
 import com.luke.uikit.internal.BitmapCache
 import com.luke.uikit.internal.hasOtherDirty
-import com.luke.uikit.internal.isStackRootEmpty
+import com.luke.uikit.internal.isStackTop
 import kotlin.math.max
 import kotlin.math.min
 
@@ -238,7 +238,7 @@ class BlurLayout @JvmOverloads constructor(
     private var recordingCanvas: Canvas? = null
 
     override fun onPreDraw(): Boolean {
-        if (!isStackRootEmpty(this)) {
+        if (!isStackTop(this)) {
             return true
         }
         if (!isDirty || hasOtherDirty(this)) {

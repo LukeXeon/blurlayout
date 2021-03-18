@@ -23,7 +23,7 @@ class StackRootView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : CoordinatorLayout(context, attrs, defStyleAttr) {
 
-    private val stack = ArrayList<FrameLayout>()
+    internal val stack = ArrayList<FrameLayout>()
     private val path = Path()
     private val pathRectF = RectF()
     private val radius = resources.getDimensionPixelSize(R.dimen.uikit_radius)
@@ -35,9 +35,6 @@ class StackRootView @JvmOverloads constructor(
             pop()
         }
     }
-
-    internal val isStackEmpty: Boolean
-        get() = stack.isEmpty()
 
     init {
         background = ColorDrawable(Color.BLACK)
@@ -199,7 +196,7 @@ class StackRootView @JvmOverloads constructor(
                                 val top = stack.removeAt(stack.size - 1)
                                 top.removeAllViews()
                                 removeView(top)
-                                if (isStackEmpty) {
+                                if (stack.isEmpty()) {
                                     onBackPressedCallback.isEnabled = false
                                 }
                             }
