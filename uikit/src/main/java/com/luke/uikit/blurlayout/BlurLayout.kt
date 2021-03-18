@@ -19,6 +19,7 @@ import androidx.annotation.Px
 import androidx.annotation.Keep
 import androidx.core.os.HandlerCompat
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentContainerView
 import com.luke.uikit.R
 import com.luke.uikit.internal.BitmapCache
 import com.luke.uikit.stack.StackRootView
@@ -253,6 +254,7 @@ class BlurLayout @JvmOverloads constructor(
     private val drawingThread: Handler
     private val rs = RenderScript.create(context)
     private val blur = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
+    private val lifecycle: FragmentContainerView
 
     private var recordingCanvas: Canvas? = null
     private var isPause: Boolean = false
@@ -266,6 +268,7 @@ class BlurLayout @JvmOverloads constructor(
         drawingThread = Handler(thread.looper)
         inflate(context, R.layout.uikit_blur_layout, this)
         drawer = findViewById(R.id.background_drawer)
+        lifecycle = findViewById(R.id.lifecycle)
         drawer.isOpaque = false
     }
 
@@ -360,6 +363,12 @@ class BlurLayout @JvmOverloads constructor(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         viewTreeObserver.addOnPreDrawListener(this)
+    }
+
+    override fun onViewRemoved(child: View?) {
+        if (child == drawer || child == lifecycle) {
+            throw UnsupportedOperationException()
+        }
     }
 
     override fun onDetachedFromWindow() {
