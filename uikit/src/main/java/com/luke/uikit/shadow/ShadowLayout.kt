@@ -7,11 +7,13 @@ import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
+import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import com.google.android.material.shape.MaterialShapeDrawable
+import com.google.android.material.shape.UseCacheShapeDrawable
 import com.luke.uikit.R
 import java.util.*
 
@@ -19,7 +21,7 @@ class ShadowLayout @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr), ViewTreeObserver.OnPreDrawListener {
     private val rect = Rect()
-    private val shadowCache = ArrayList<MaterialShapeDrawable>()
+    private val shadowCache = ArrayList<UseCacheShapeDrawable>()
 
     init {
         super.setClipChildren(false)
@@ -47,7 +49,8 @@ class ShadowLayout @JvmOverloads constructor(
         if (childCount > shadowCache.size) {
             shadowCache.ensureCapacity(childCount)
             while (childCount > shadowCache.size) {
-                shadowCache.add(MaterialShapeDrawable().apply {
+                shadowCache.add(
+                    UseCacheShapeDrawable().apply {
                     shadowCompatibilityMode = MaterialShapeDrawable.SHADOW_COMPAT_MODE_ALWAYS
                     callback = this@ShadowLayout
                     fillColor = ColorStateList.valueOf(Color.TRANSPARENT)
@@ -63,12 +66,7 @@ class ShadowLayout @JvmOverloads constructor(
             val drawable = shadowCache[index]
             val layoutParams = child.layoutParams
             if (layoutParams is LayoutParams) {
-                rect.set(
-                    child.x.toInt(),
-                    child.y.toInt(),
-                    (child.x + child.width).toInt(),
-                    (child.y + child.height).toInt()
-                )
+                child.getBoundRect(rect)
                 drawable.setCornerSize(layoutParams.cornerRadius)
                 drawable.elevation = layoutParams.shadowElevation
                 drawable.setShadowColor(layoutParams.shadowColor)
@@ -76,6 +74,15 @@ class ShadowLayout @JvmOverloads constructor(
             }
         }
         return true
+    }
+
+    private fun View.getBoundRect(rect: Rect) {
+        rect.set(
+            this.x.toInt(),
+            this.y.toInt(),
+            (this.x + this.width).toInt(),
+            (this.y + this.height).toInt()
+        )
     }
 
     override fun verifyDrawable(who: Drawable): Boolean {

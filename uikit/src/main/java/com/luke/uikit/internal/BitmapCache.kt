@@ -6,6 +6,8 @@ import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Shader
+import android.os.Handler
+import android.os.Looper
 import com.luke.uikit.bitmappool.LruBitmapPool
 import com.luke.uikit.bitmappool.LruPoolStrategy
 import java.util.*
@@ -13,6 +15,7 @@ import java.util.*
 internal object BitmapCache : ComponentCallbacks2 {
     private val entries = HashMap<Bitmap, Item>()
     private val bitmaps: LruBitmapPool
+    private val mainThread = Handler(Looper.getMainLooper())
 
     init {
         val displayMetrics = Resources.getSystem().displayMetrics
@@ -41,15 +44,21 @@ internal object BitmapCache : ComponentCallbacks2 {
         bitmaps.trimMemory(level)
     }
 
+    @JvmStatic
     operator fun get(width: Int, height: Int): Item {
-        val bitmap = bitmaps.getDirty(width, height, Bitmap.Config.ARGB_8888)
+        val bitmap = bitmaps[width, height, Bitmap.Config.ARGB_8888]
         return synchronized(entries) {
             entries.getOrPut(bitmap) { Item(bitmap) }
         }
     }
 
+    @JvmStatic
     fun put(item: Item) {
-        bitmaps.put(item.bitmap)
+        if (Looper.myLooper() == mainThread.looper) {
+            mainThread.post { bitmaps.put(item.bitmap) }
+        } else {
+            bitmaps.put(item.bitmap)
+        }
     }
 
     class Item(val bitmap: Bitmap) {

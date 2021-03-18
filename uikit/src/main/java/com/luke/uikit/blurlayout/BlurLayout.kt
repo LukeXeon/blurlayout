@@ -11,6 +11,8 @@ import android.renderscript.RenderScript
 import android.renderscript.ScriptIntrinsicBlur
 import android.util.AttributeSet
 import android.view.TextureView
+import android.view.View
+import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import androidx.annotation.ColorInt
@@ -19,8 +21,7 @@ import androidx.annotation.Px
 import androidx.core.os.HandlerCompat
 import com.luke.uikit.R
 import com.luke.uikit.internal.BitmapCache
-import com.luke.uikit.internal.hasOtherDirty
-import com.luke.uikit.internal.isStackTop
+import com.luke.uikit.stack.StackRootView
 import kotlin.math.max
 import kotlin.math.min
 
@@ -64,8 +65,8 @@ class BlurLayout @JvmOverloads constructor(
     }
 
     private inner class DrawingTask(
-        val width: Int,
-        val height: Int,
+        val scaledWidth: Int,
+        val scaledHeight: Int,
         val cornerRadius: Int,
         val blurSampling: Float,
         val blurRadius: Float,
@@ -73,8 +74,6 @@ class BlurLayout @JvmOverloads constructor(
     ) : Runnable {
 
         override fun run() {
-            val scaledWidth = (width / blurSampling).toInt()
-            val scaledHeight = (height / blurSampling).toInt()
             val entry = BitmapCache[scaledWidth, scaledHeight]
             val bitmap = entry.bitmap
             // 在后台慢慢用软件画图来画，防止主线程卡住
@@ -237,14 +236,53 @@ class BlurLayout @JvmOverloads constructor(
 
     private var recordingCanvas: Canvas? = null
 
-    override fun onPreDraw(): Boolean {
-        if (!isStackTop(this)) {
-            return true
+    private fun checkDraw(): Boolean {
+        fun checkStackTop(v: View): Boolean {
+            var c2: View = v
+            var p2: ViewGroup? = v.parent as? ViewGroup
+            while (p2 != null && p2 !is StackRootView) {
+                c2 = p2
+                p2 = p2.parent as? ViewGroup
+            }
+            return if (p2 is StackRootView) {
+                if (p2.stack.isNotEmpty()) {
+                    p2.stack.last() == c2
+                } else {
+                    true
+                }
+            } else {
+                true
+            }
         }
-        if (!isDirty || hasOtherDirty(this)) {
+        if (!isDirty) {
+            return checkStackTop(this)
+        }
+        var c: View? = this
+        var p: ViewGroup? = this.parent as? ViewGroup
+        while (p != null && p !is StackRootView) {
+            for (index in 0 until p.childCount) {
+                val v = p.getChildAt(index)
+                if (v != c && v.isDirty) {
+                    return checkStackTop(p)
+                }
+            }
+            c = p
+            p = p.parent as? ViewGroup
+        }
+        return false
+    }
+
+    override fun onPreDraw(): Boolean {
+        if (checkDraw()) {
             getGlobalVisibleRect(visibleRect)
             val width = visibleRect.width()
             val height = visibleRect.height()
+            val blurSampling = blurSampling
+            val scaledWidth = (width / blurSampling).toInt()
+            val scaledHeight = (height / blurSampling).toInt()
+            if (scaledWidth * scaledHeight == 0) {
+                return true
+            }
             synchronized(recorder) {
                 // 使用Picture来记录绘制内容
                 // 因为它只记录绘制的操作，所以这比直接用Canvas要更快
@@ -265,8 +303,8 @@ class BlurLayout @JvmOverloads constructor(
             drawingThread.removeCallbacksAndMessages(taskToken)
             HandlerCompat.postDelayed(
                 drawingThread, DrawingTask(
-                    width,
-                    height,
+                    scaledWidth,
+                    scaledHeight,
                     cornerRadius,
                     blurSampling,
                     blurRadius,
