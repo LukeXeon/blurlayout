@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <item name="uikit_radius" type="dimen">15dp</item>
+    <string name="uikit_blur_layout_lifecycle">com.luke.uikit.blurlayout.BlurLayout$Lifecycle</string>
 </resources>
