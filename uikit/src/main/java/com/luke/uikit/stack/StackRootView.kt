@@ -58,61 +58,44 @@ class StackRootView @JvmOverloads constructor(
 
     private inner class PushTransition(
         val view: View, val layoutParams: FrameLayout.LayoutParams?
-    ) : BottomSheetCallback(), Runnable {
-
-        private var wrapper: FrameLayout? = null
-
-        override fun onSlide(bottomSheet: View, slideOffset: Float) {
-            if (slideOffset == 1f) {
-                hasTransitionRunning = false
-                (wrapper?.layoutParams as InnerLayoutParams)
-                    .behavior.removeBottomSheetCallback(this)
-            }
-        }
-
-        override fun onStateChanged(bottomSheet: View, newState: Int) {
-
-        }
+    ) : Runnable {
 
         override fun run() {
-            var wrapper = wrapper
-            if (wrapper != null) {
-                (wrapper.layoutParams as InnerLayoutParams).behavior.state =
-                    BottomSheetBehavior.STATE_EXPANDED
-                return
-            }
             if (hasTransitionRunning) {
                 post(this)
                 return
             }
             hasTransitionRunning = true
-            wrapper = FrameLayout(context)
+            val wrapper = FrameLayout(context)
             wrapper.setPadding(0, topHeight.toInt(), 0, 0)
             wrapper.addView(view, layoutParams)
             wrapper.isClickable = true
-            val lp = InnerLayoutParams()
-            lp.behavior.addBottomSheetCallback(this)
-            addView(wrapper, lp)
+            val params = InnerParams()
+            val behavior = params.behavior
+            behavior.addBottomSheetCallback(object : BottomSheetCallback() {
+                override fun onSlide(bottomSheet: View, slideOffset: Float) {
+                    if (slideOffset == 1f) {
+                        hasTransitionRunning = false
+                        behavior.removeBottomSheetCallback(this)
+                    }
+                }
+
+                override fun onStateChanged(bottomSheet: View, newState: Int) {
+
+                }
+            })
+            addView(wrapper, params)
             wrapper.bringToFront()
             stack.add(wrapper)
             onBackPressedCallback.isEnabled = true
-            this.wrapper = wrapper
-            post(this)
+            post { behavior.state = BottomSheetBehavior.STATE_EXPANDED }
         }
     }
 
     private val FrameLayout.normalized: Float
-        get() = (layoutParams as InnerLayoutParams).normalized
+        get() = (layoutParams as InnerParams).normalized
 
-    private inner class PopTransition : BottomSheetCallback(), Runnable {
-
-        override fun onSlide(bottomSheet: View, slideOffset: Float) {
-            if (slideOffset == -1f) {
-                hasTransitionRunning = false
-            }
-        }
-
-        override fun onStateChanged(bottomSheet: View, newState: Int) {}
+    private inner class PopTransition : Runnable {
 
         override fun run() {
             if (hasTransitionRunning) {
@@ -123,7 +106,6 @@ class StackRootView @JvmOverloads constructor(
                 hasTransitionRunning = true
                 val behavior = BottomSheetBehavior.from(stack.last())
                 behavior.state = BottomSheetBehavior.STATE_HIDDEN
-                behavior.addBottomSheetCallback(this)
             }
         }
     }
@@ -189,7 +171,7 @@ class StackRootView @JvmOverloads constructor(
         return result
     }
 
-    private inner class InnerLayoutParams :
+    private inner class InnerParams :
         CoordinatorLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT) {
 
         var normalized: Float = 0f
@@ -212,6 +194,7 @@ class StackRootView @JvmOverloads constructor(
 
                     override fun onSlide(bottomSheet: View, slideOffset: Float) {
                         if (slideOffset == -1f) {
+                            hasTransitionRunning = false
                             if (stack.size > 0) {
                                 val top = stack.removeAt(stack.size - 1)
                                 top.removeAllViews()
