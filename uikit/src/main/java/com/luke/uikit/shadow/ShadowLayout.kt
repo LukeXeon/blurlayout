@@ -5,9 +5,11 @@ import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Rect
+import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import com.google.android.material.shape.MaterialShapeDrawable
 import com.luke.uikit.R
@@ -15,57 +17,75 @@ import java.util.*
 
 class ShadowLayout @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
-) : FrameLayout(context, attrs, defStyleAttr) {
+) : FrameLayout(context, attrs, defStyleAttr), ViewTreeObserver.OnPreDrawListener {
     private val rect = Rect()
-    private val drawableCache = ArrayList<MaterialShapeDrawable>()
+    private val shadowCache = ArrayList<MaterialShapeDrawable>()
 
     init {
         super.setClipChildren(false)
+        setWillNotDraw(false)
     }
 
     override fun setClipChildren(clipChildren: Boolean) {
         super.setClipChildren(false)
     }
 
-    private fun updateCache() {
-        if (childCount > drawableCache.size) {
-            drawableCache.ensureCapacity(childCount)
-            while (childCount > drawableCache.size) {
-                drawableCache.add(MaterialShapeDrawable().apply {
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        viewTreeObserver.addOnPreDrawListener(this)
+    }
+
+    override fun onDetachedFromWindow() {
+        viewTreeObserver.removeOnPreDrawListener(this)
+        super.onDetachedFromWindow()
+    }
+
+    override fun onPreDraw(): Boolean {
+        if (!isDirty) {
+            return true
+        }
+        if (childCount > shadowCache.size) {
+            shadowCache.ensureCapacity(childCount)
+            while (childCount > shadowCache.size) {
+                shadowCache.add(MaterialShapeDrawable().apply {
                     shadowCompatibilityMode = MaterialShapeDrawable.SHADOW_COMPAT_MODE_ALWAYS
                     callback = this@ShadowLayout
                     fillColor = ColorStateList.valueOf(Color.TRANSPARENT)
                 })
             }
         }
-        while (drawableCache.size > childCount) {
-            drawableCache.removeLast()
+        while (shadowCache.size > childCount) {
+            shadowCache.removeLast()
         }
-        drawableCache.trimToSize()
+        shadowCache.trimToSize()
         for (index in 0 until childCount) {
             val child = getChildAt(index)
-            val drawable = drawableCache[index]
+            val drawable = shadowCache[index]
             val layoutParams = child.layoutParams
             if (layoutParams is LayoutParams) {
-                child.getHitRect(rect)
+                rect.set(
+                    child.x.toInt(),
+                    child.y.toInt(),
+                    (child.x + child.width).toInt(),
+                    (child.y + child.height).toInt()
+                )
                 drawable.setCornerSize(layoutParams.cornerRadius)
                 drawable.elevation = layoutParams.shadowElevation
                 drawable.setShadowColor(layoutParams.shadowColor)
                 drawable.bounds = rect
             }
         }
+        return true
     }
 
-    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-        super.onLayout(changed, left, top, right, bottom)
-        updateCache()
+    override fun verifyDrawable(who: Drawable): Boolean {
+        return super.verifyDrawable(who) || shadowCache.contains(who)
     }
 
-    override fun dispatchDraw(canvas: Canvas) {
-        for (index in 0 until drawableCache.size) {
-            drawableCache[index].draw(canvas)
+    override fun onDraw(canvas: Canvas) {
+        for (index in 0 until shadowCache.size) {
+            shadowCache[index].draw(canvas)
         }
-        super.dispatchDraw(canvas)
     }
 
     override fun generateLayoutParams(attrs: AttributeSet?): LayoutParams {
@@ -94,7 +114,7 @@ class ShadowLayout @JvmOverloads constructor(
                     ).toFloat()
                 cornerRadius =
                     array.getDimensionPixelSize(
-                        R.styleable.ShadowLayout_Layout_uikit_shadowCornerRadius,
+                        R.styleable.ShadowLayout_Layout_uikit_cornerRadius,
                         0
                     ).toFloat()
                 shadowColor =
