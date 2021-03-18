@@ -130,7 +130,6 @@ public class UseCacheShapeDrawable extends Drawable implements TintAwareDrawable
   private final RectF insetRectF = new RectF();
   private final Region transparentRegion = new Region();
   private final Region scratchRegion = new Region();
-  private final Handler handler = new Handler(Looper.getMainLooper());
   private ShapeAppearanceModel strokeShapeAppearance;
 
   private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -1008,7 +1007,7 @@ public class UseCacheShapeDrawable extends Drawable implements TintAwareDrawable
     canvas.drawBitmap(shadowLayer, shadowLeft, shadowTop, null);
     // Because we create the bitmap every time, we can recycle it. We may need to stop doing this
     // if we end up keeping the bitmap in memory for performance.
-    handler.post(() -> BitmapCache.put(item));
+    BitmapCache.putDelay(item);
 
     // Restore the canvas to the same size it was before drawing any shadows.
     canvas.restore();

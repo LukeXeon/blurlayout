@@ -15,7 +15,11 @@ import java.util.*
 internal object BitmapCache : ComponentCallbacks2 {
     private val entries = HashMap<Bitmap, Item>()
     private val bitmaps: LruBitmapPool
-    private val mainThread = Handler(Looper.getMainLooper())
+    private val handler = object : ThreadLocal<Handler>() {
+        override fun initialValue(): Handler? {
+            return Looper.myLooper()?.let { Handler(it) }
+        }
+    }
 
     init {
         val displayMetrics = Resources.getSystem().displayMetrics
@@ -54,10 +58,16 @@ internal object BitmapCache : ComponentCallbacks2 {
 
     @JvmStatic
     fun put(item: Item) {
-        if (Looper.myLooper() == mainThread.looper) {
-            mainThread.post { bitmaps.put(item.bitmap) }
+        bitmaps.put(item.bitmap)
+    }
+
+    @JvmStatic
+    fun putDelay(item: Item) {
+        val h = handler.get()
+        if (h != null) {
+            h.post { put(item) }
         } else {
-            bitmaps.put(item.bitmap)
+            put(item)
         }
     }
 
