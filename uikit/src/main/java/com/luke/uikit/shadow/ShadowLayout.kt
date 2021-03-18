@@ -12,7 +12,6 @@ import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewTreeObserver
 import android.widget.FrameLayout
-import com.google.android.material.shape.MaterialShapeDrawable
 import com.google.android.material.shape.UseCacheShapeDrawable
 import com.luke.uikit.R
 import java.util.*
@@ -51,7 +50,7 @@ class ShadowLayout @JvmOverloads constructor(
             while (childCount > shadowCache.size) {
                 shadowCache.add(
                     UseCacheShapeDrawable().apply {
-                    shadowCompatibilityMode = MaterialShapeDrawable.SHADOW_COMPAT_MODE_ALWAYS
+                    shadowCompatibilityMode = UseCacheShapeDrawable.SHADOW_COMPAT_MODE_ALWAYS
                     callback = this@ShadowLayout
                     fillColor = ColorStateList.valueOf(Color.TRANSPARENT)
                 })
