@@ -1,14 +1,13 @@
 package com.luke.uikit.internal
 
 import android.app.Activity
-import android.app.Application
 import android.os.Bundle
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
 import com.luke.uikit.stack.StackRootView
 import java.util.*
 
-internal object RootViews : Application.ActivityLifecycleCallbacks {
+internal object RootViews : Plugin() {
 
     val activities = WeakHashMap<Activity, StackRootView>()
 
@@ -33,21 +32,6 @@ internal object RootViews : Application.ActivityLifecycleCallbacks {
                 )
             }
         }
-    }
-
-    override fun onActivityStarted(activity: Activity) {
-    }
-
-    override fun onActivityResumed(activity: Activity) {
-    }
-
-    override fun onActivityPaused(activity: Activity) {
-    }
-
-    override fun onActivityStopped(activity: Activity) {
-    }
-
-    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {
     }
 
     override fun onActivityDestroyed(activity: Activity) {

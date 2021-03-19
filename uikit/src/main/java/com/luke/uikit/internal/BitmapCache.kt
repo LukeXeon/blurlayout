@@ -1,7 +1,5 @@
 package com.luke.uikit.internal
 
-import android.content.ComponentCallbacks2
-import android.content.res.Configuration
 import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
@@ -12,7 +10,7 @@ import com.luke.uikit.bitmappool.LruBitmapPool
 import com.luke.uikit.bitmappool.LruPoolStrategy
 import java.util.*
 
-internal object BitmapCache : ComponentCallbacks2 {
+internal object BitmapCache : Plugin() {
     private val entries = HashMap<Bitmap, Item>()
     private val bitmaps: LruBitmapPool
     private val handler = object : ThreadLocal<Handler>() {
@@ -34,10 +32,6 @@ internal object BitmapCache : ComponentCallbacks2 {
                 return bitmap
             }
         }, setOf(Bitmap.Config.ARGB_8888))
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-
     }
 
     override fun onLowMemory() {

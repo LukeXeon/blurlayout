@@ -8,14 +8,18 @@ import android.net.Uri
 import androidx.annotation.Keep
 
 @Keep
-internal class LibraryInstaller : ContentProvider() {
+internal class PluginInstaller : ContentProvider() {
+
+    private val plugins = arrayOf(RootViews, BitmapCache)
 
     override fun onCreate(): Boolean {
         val ctx = context
         if (ctx != null) {
             val application = ctx.applicationContext as Application
-            application.registerActivityLifecycleCallbacks(RootViews)
-            application.registerComponentCallbacks(BitmapCache)
+            plugins.forEach {
+                application.registerActivityLifecycleCallbacks(it)
+                application.registerComponentCallbacks(it)
+            }
         }
         return ctx != null
     }
