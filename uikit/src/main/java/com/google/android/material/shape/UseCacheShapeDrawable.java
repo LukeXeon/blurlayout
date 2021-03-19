@@ -57,8 +57,6 @@ import androidx.annotation.StyleRes;
 import androidx.core.graphics.drawable.TintAwareDrawable;
 import androidx.core.util.ObjectsCompat;
 
-import android.os.Handler;
-import android.os.Looper;
 import android.util.AttributeSet;
 import android.util.Log;
 import com.google.android.material.color.MaterialColors;
@@ -114,7 +112,7 @@ public class UseCacheShapeDrawable extends Drawable implements TintAwareDrawable
 
   private static final Paint clearPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-  private MaterialShapeDrawableState drawableState;
+  private UseCacheShapeDrawableState drawableState;
 
   // Inter-method state.
   private final ShadowCompatOperation[] cornerShadowOperation = new ShadowCompatOperation[4];
@@ -130,6 +128,7 @@ public class UseCacheShapeDrawable extends Drawable implements TintAwareDrawable
   private final RectF insetRectF = new RectF();
   private final Region transparentRegion = new Region();
   private final Region scratchRegion = new Region();
+  private final Canvas shadowCanvas = new Canvas();
   private ShapeAppearanceModel strokeShapeAppearance;
 
   private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -199,10 +198,10 @@ public class UseCacheShapeDrawable extends Drawable implements TintAwareDrawable
    *     rendered in this drawable.
    */
   public UseCacheShapeDrawable(@NonNull ShapeAppearanceModel shapeAppearanceModel) {
-    this(new MaterialShapeDrawableState(shapeAppearanceModel, null));
+    this(new UseCacheShapeDrawableState(shapeAppearanceModel, null));
   }
 
-  private UseCacheShapeDrawable(@NonNull MaterialShapeDrawableState drawableState) {
+  private UseCacheShapeDrawable(@NonNull UseCacheShapeDrawableState drawableState) {
     this.drawableState = drawableState;
     strokePaint.setStyle(Style.STROKE);
     fillPaint.setStyle(Style.FILL);
@@ -237,7 +236,7 @@ public class UseCacheShapeDrawable extends Drawable implements TintAwareDrawable
   @NonNull
   @Override
   public Drawable mutate() {
-    MaterialShapeDrawableState newDrawableState = new MaterialShapeDrawableState(drawableState);
+    UseCacheShapeDrawableState newDrawableState = new UseCacheShapeDrawableState(drawableState);
     drawableState = newDrawableState;
     return this;
   }
@@ -996,8 +995,7 @@ public class UseCacheShapeDrawable extends Drawable implements TintAwareDrawable
             (int) pathBounds.height() + drawableState.shadowCompatRadius * 2 + pathExtraHeight
     );
     Bitmap shadowLayer = item.getBitmap();
-    Canvas shadowCanvas = new Canvas(shadowLayer);
-
+    shadowCanvas.setBitmap(shadowLayer);
     // Top Left of shadow (left - shadowCompatRadius, top - shadowCompatRadius) should be drawn at
     // (0, 0) on shadowCanvas. Offset is handled by prepareCanvasForShadow and drawCompatShadow.
     float shadowLeft = getBounds().left - drawableState.shadowCompatRadius - pathExtraWidth;
@@ -1005,6 +1003,7 @@ public class UseCacheShapeDrawable extends Drawable implements TintAwareDrawable
     shadowCanvas.translate(-shadowLeft, -shadowTop);
     drawCompatShadow(shadowCanvas);
     canvas.drawBitmap(shadowLayer, shadowLeft, shadowTop, null);
+    shadowCanvas.setBitmap(null);
     // Because we create the bitmap every time, we can recycle it. We may need to stop doing this
     // if we end up keeping the bitmap in memory for performance.
     BitmapCache.putDelay(item);
@@ -1373,7 +1372,7 @@ public class UseCacheShapeDrawable extends Drawable implements TintAwareDrawable
     return drawableState.shapeAppearanceModel.isRoundRect(getBoundsAsRectF());
   }
 
-  static final class MaterialShapeDrawableState extends ConstantState {
+  static final class UseCacheShapeDrawableState extends ConstantState {
 
     @NonNull public ShapeAppearanceModel shapeAppearanceModel;
     @Nullable public ElevationOverlayProvider elevationOverlayProvider;
@@ -1403,14 +1402,14 @@ public class UseCacheShapeDrawable extends Drawable implements TintAwareDrawable
 
     public Style paintStyle = Style.FILL_AND_STROKE;
 
-    public MaterialShapeDrawableState(
+    public UseCacheShapeDrawableState(
         ShapeAppearanceModel shapeAppearanceModel,
         ElevationOverlayProvider elevationOverlayProvider) {
       this.shapeAppearanceModel = shapeAppearanceModel;
       this.elevationOverlayProvider = elevationOverlayProvider;
     }
 
-    public MaterialShapeDrawableState(@NonNull MaterialShapeDrawableState orig) {
+    public UseCacheShapeDrawableState(@NonNull UseCacheShapeDrawableState orig) {
       shapeAppearanceModel = orig.shapeAppearanceModel;
       elevationOverlayProvider = orig.elevationOverlayProvider;
       strokeWidth = orig.strokeWidth;
