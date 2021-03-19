@@ -1,8 +1,9 @@
 package com.luke.uikit.blurlayout
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.*
-import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Process
@@ -16,10 +17,7 @@ import android.widget.FrameLayout
 import androidx.annotation.ColorInt
 import androidx.annotation.FloatRange
 import androidx.annotation.Px
-import androidx.annotation.Keep
 import androidx.core.os.HandlerCompat
-import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentContainerView
 import com.luke.uikit.R
 import com.luke.uikit.internal.BitmapCache
 import com.luke.uikit.stack.StackRootView
@@ -212,36 +210,6 @@ class BlurLayout @JvmOverloads constructor(
         }
     }
 
-    @Keep
-    internal class Lifecycle : Fragment() {
-
-        private var target: BlurLayout? = null
-
-        override fun onDestroyView() {
-            super.onDestroyView()
-            target = null
-        }
-
-        override fun onCreateView(
-            inflater: LayoutInflater,
-            container: ViewGroup?,
-            savedInstanceState: Bundle?
-        ): View? {
-            target = container?.parent as? BlurLayout
-            return null
-        }
-
-        override fun onPause() {
-            super.onPause()
-            target?.isPause = true
-        }
-
-        override fun onResume() {
-            super.onResume()
-            target?.isPause = false
-        }
-    }
-
     private val taskToken = Any()
     private val recorder = Picture()
     private val backgroundCanvas = Canvas()
@@ -254,10 +222,17 @@ class BlurLayout @JvmOverloads constructor(
     private val drawingThread: Handler
     private val rs = RenderScript.create(context)
     private val blur = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
-    private val lifecycle: FragmentContainerView
 
     private var recordingCanvas: Canvas? = null
-    private var isPause: Boolean = false
+    private var isPaused: Boolean = false
+
+    fun onPause() {
+        isPaused = true
+    }
+
+    fun onResume() {
+        isPaused = false
+    }
 
     init {
         val thread = HandlerThread(
@@ -268,12 +243,11 @@ class BlurLayout @JvmOverloads constructor(
         drawingThread = Handler(thread.looper)
         inflate(context, R.layout.uikit_blur_layout, this)
         drawer = findViewById(R.id.background_drawer)
-        lifecycle = findViewById(R.id.lifecycle)
         drawer.isOpaque = false
     }
 
     private fun checkDraw(): Boolean {
-        if (isPause) {
+        if (isPaused) {
             return false
         }
         fun checkStackTop(v: View): Boolean {
@@ -366,7 +340,7 @@ class BlurLayout @JvmOverloads constructor(
     }
 
     override fun onViewRemoved(child: View?) {
-        if (child == drawer || child == lifecycle) {
+        if (child == drawer) {
             throw UnsupportedOperationException()
         }
     }
