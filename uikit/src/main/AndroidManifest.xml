@@ -5,7 +5,7 @@
         <provider
             android:multiprocess="true"
             android:authorities="${applicationId}.uikit.installer"
-            android:name=".internal.PluginInstaller"
+            android:name=".internal.PluginManager"
             android:exported="false" />
     </application>
 </manifest>
