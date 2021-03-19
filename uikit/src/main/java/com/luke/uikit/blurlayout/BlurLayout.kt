@@ -246,27 +246,29 @@ class BlurLayout @JvmOverloads constructor(
         drawer.isOpaque = false
     }
 
+    private fun checkStackTop(v: View): Boolean {
+        var c2: View = v
+        var p2: ViewGroup? = v.parent as? ViewGroup
+        while (p2 != null && p2 !is StackRootView) {
+            c2 = p2
+            p2 = p2.parent as? ViewGroup
+        }
+        return if (p2 is StackRootView) {
+            if (p2.stack.isNotEmpty()) {
+                p2.stack.last() == c2
+            } else {
+                true
+            }
+        } else {
+            true
+        }
+    }
+
     private fun checkDraw(): Boolean {
         if (isPaused) {
             return false
         }
-        fun checkStackTop(v: View): Boolean {
-            var c2: View = v
-            var p2: ViewGroup? = v.parent as? ViewGroup
-            while (p2 != null && p2 !is StackRootView) {
-                c2 = p2
-                p2 = p2.parent as? ViewGroup
-            }
-            return if (p2 is StackRootView) {
-                if (p2.stack.isNotEmpty()) {
-                    p2.stack.last() == c2
-                } else {
-                    true
-                }
-            } else {
-                true
-            }
-        }
+
         if (!isDirty) {
             return checkStackTop(this)
         }
