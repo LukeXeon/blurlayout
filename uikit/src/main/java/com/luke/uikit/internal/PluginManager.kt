@@ -8,7 +8,7 @@ import android.net.Uri
 import androidx.annotation.Keep
 
 @Keep
-internal class PluginInstaller : ContentProvider() {
+internal class PluginManager : ContentProvider() {
 
     private val plugins = arrayOf(RootViews, BitmapCache)
 
