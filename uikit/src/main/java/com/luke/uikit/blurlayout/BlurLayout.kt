@@ -1,8 +1,6 @@
 package com.luke.uikit.blurlayout
 
-import android.app.Activity
 import android.content.Context
-import android.content.ContextWrapper
 import android.graphics.*
 import android.os.Handler
 import android.os.HandlerThread
@@ -12,7 +10,10 @@ import android.renderscript.Element
 import android.renderscript.RenderScript
 import android.renderscript.ScriptIntrinsicBlur
 import android.util.AttributeSet
-import android.view.*
+import android.view.TextureView
+import android.view.View
+import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import androidx.annotation.ColorInt
 import androidx.annotation.FloatRange
@@ -218,7 +219,7 @@ class BlurLayout @JvmOverloads constructor(
     private val maskPaint = Paint()
     private val drawingRectF = RectF()
     private val drawingRect = Rect()
-    private val drawer: TextureView
+    private val drawer: TextureView = TextureView(context)
     private val drawingThread: Handler
     private val rs = RenderScript.create(context)
     private val blur = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
@@ -240,9 +241,12 @@ class BlurLayout @JvmOverloads constructor(
             Process.THREAD_PRIORITY_DISPLAY
         )
         thread.start()
+        attachViewToParent(
+            drawer,
+            0,
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+        )
         drawingThread = Handler(thread.looper)
-        inflate(context, R.layout.uikit_blur_layout, this)
-        drawer = findViewById(R.id.background_drawer)
         drawer.isOpaque = false
     }
 
