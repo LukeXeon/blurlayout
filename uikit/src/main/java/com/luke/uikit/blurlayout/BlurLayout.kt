@@ -18,6 +18,7 @@ import android.widget.FrameLayout
 import androidx.annotation.ColorInt
 import androidx.annotation.FloatRange
 import androidx.annotation.Px
+import androidx.annotation.WorkerThread
 import androidx.core.os.HandlerCompat
 import com.luke.uikit.R
 import com.luke.uikit.internal.BitmapCache
@@ -99,116 +100,13 @@ class BlurLayout @JvmOverloads constructor(
             bitmap.prepareToDraw()
             try {
                 val canvas = drawer.lockCanvas() ?: return
-                draw(canvas, entry)
+                drawInBackground(canvas, entry)
                 drawer.unlockCanvasAndPost(canvas)
             } finally {
                 BitmapCache.put(entry)
             }
         }
 
-        private fun processBitmap(blurRadius: Float, bitmap: Bitmap) {
-            val radius = max(25f, min(0f, blurRadius))
-            var input: Allocation? = null
-            var output: Allocation? = null
-            try {
-                input = Allocation.createFromBitmap(
-                    rs, bitmap, Allocation.MipmapControl.MIPMAP_NONE,
-                    Allocation.USAGE_SCRIPT
-                )
-                output = Allocation.createTyped(rs, input.type)
-                blur.setInput(input)
-                blur.setRadius(radius)
-                blur.forEach(output)
-                output.copyTo(bitmap)
-            } finally {
-                input?.destroy()
-                output?.destroy()
-            }
-        }
-
-        private fun draw(canvas: Canvas, item: BitmapCache.Item) {
-            if (cornerRadius > 0) {
-                canvas.save()
-                // 经过渲染的Bitmap由于缩放的关系
-                // 可能会比View小，所以要做特殊处理，把它放大回去
-                canvas.scale(
-                    blurSampling,
-                    blurSampling
-                )
-                canvas.drawRoundRect(
-                    drawingRectF.apply {
-                        set(
-                            0f,
-                            0f,
-                            width.toFloat() / blurSampling,
-                            height.toFloat() / blurSampling
-                        )
-                    },
-                    cornerRadius / blurSampling,
-                    cornerRadius / blurSampling,
-                    bitmapPaint.apply {
-                        reset()
-                        isFilterBitmap = true
-                        isAntiAlias = true
-                        shader = item.shader
-                    }
-                )
-                canvas.drawRoundRect(
-                    drawingRectF.apply {
-                        set(
-                            0f,
-                            0f,
-                            width.toFloat() / blurSampling,
-                            height.toFloat() / blurSampling
-                        )
-                    },
-                    cornerRadius / blurSampling,
-                    cornerRadius / blurSampling,
-                    maskPaint.apply {
-                        reset()
-                        color = maskColor
-                        isAntiAlias = true
-                    }
-                )
-                canvas.restore()
-            } else {
-                canvas.drawBitmap(
-                    item.bitmap,
-                    null,
-                    drawingRect.apply {
-                        set(
-                            0,
-                            0,
-                            width,
-                            height
-                        )
-                    },
-                    bitmapPaint.apply {
-                        reset()
-                        isFilterBitmap = true
-                        isAntiAlias = true
-                    }
-                )
-                canvas.drawRoundRect(
-                    drawingRectF.apply {
-                        set(
-                            0f,
-                            0f,
-                            width.toFloat(),
-                            height.toFloat()
-                        )
-                    },
-                    cornerRadius.toFloat(),
-                    cornerRadius.toFloat(),
-                    maskPaint.apply {
-                        reset()
-                        color = maskColor
-                        isAntiAlias = true
-                    }
-                )
-            }
-
-        }
     }
 
     private val taskToken = Any()
@@ -259,7 +157,7 @@ class BlurLayout @JvmOverloads constructor(
         }
         return if (p2 is StackRootView) {
             if (p2.stack.isNotEmpty()) {
-                p2.stack.last() == c2
+                p2.stack.last().view == c2
             } else {
                 true
             }
@@ -289,6 +187,111 @@ class BlurLayout @JvmOverloads constructor(
             p = p.parent as? ViewGroup
         }
         return false
+    }
+
+    @WorkerThread
+    private fun processBitmap(blurRadius: Float, bitmap: Bitmap) {
+        val radius = max(25f, min(0f, blurRadius))
+        var input: Allocation? = null
+        var output: Allocation? = null
+        try {
+            input = Allocation.createFromBitmap(
+                rs, bitmap, Allocation.MipmapControl.MIPMAP_NONE,
+                Allocation.USAGE_SCRIPT
+            )
+            output = Allocation.createTyped(rs, input.type)
+            blur.setInput(input)
+            blur.setRadius(radius)
+            blur.forEach(output)
+            output.copyTo(bitmap)
+        } finally {
+            input?.destroy()
+            output?.destroy()
+        }
+    }
+
+    @WorkerThread
+    private fun drawInBackground(canvas: Canvas, item: BitmapCache.Item) {
+        if (cornerRadius > 0) {
+            canvas.save()
+            // 经过渲染的Bitmap由于缩放的关系
+            // 可能会比View小，所以要做特殊处理，把它放大回去
+            canvas.scale(
+                blurSampling,
+                blurSampling
+            )
+            canvas.drawRoundRect(
+                drawingRectF.apply {
+                    set(
+                        0f,
+                        0f,
+                        width.toFloat() / blurSampling,
+                        height.toFloat() / blurSampling
+                    )
+                },
+                cornerRadius / blurSampling,
+                cornerRadius / blurSampling,
+                bitmapPaint.apply {
+                    reset()
+                    isFilterBitmap = true
+                    isAntiAlias = true
+                    shader = item.shader
+                }
+            )
+            canvas.drawRoundRect(
+                drawingRectF.apply {
+                    set(
+                        0f,
+                        0f,
+                        width.toFloat() / blurSampling,
+                        height.toFloat() / blurSampling
+                    )
+                },
+                cornerRadius / blurSampling,
+                cornerRadius / blurSampling,
+                maskPaint.apply {
+                    reset()
+                    color = maskColor
+                    isAntiAlias = true
+                }
+            )
+            canvas.restore()
+        } else {
+            canvas.drawBitmap(
+                item.bitmap,
+                null,
+                drawingRect.apply {
+                    set(
+                        0,
+                        0,
+                        width,
+                        height
+                    )
+                },
+                bitmapPaint.apply {
+                    reset()
+                    isFilterBitmap = true
+                    isAntiAlias = true
+                }
+            )
+            canvas.drawRoundRect(
+                drawingRectF.apply {
+                    set(
+                        0f,
+                        0f,
+                        width.toFloat(),
+                        height.toFloat()
+                    )
+                },
+                cornerRadius.toFloat(),
+                cornerRadius.toFloat(),
+                maskPaint.apply {
+                    reset()
+                    color = maskColor
+                    isAntiAlias = true
+                }
+            )
+        }
     }
 
     override fun onPreDraw(): Boolean {

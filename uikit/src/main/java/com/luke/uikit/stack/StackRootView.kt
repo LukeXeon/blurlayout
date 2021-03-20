@@ -7,11 +7,11 @@ import android.graphics.Color
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.drawable.ColorDrawable
-import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.View
 import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.OnBackPressedDispatcher
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetBehavior.BottomSheetCallback
@@ -20,21 +20,16 @@ import com.luke.uikit.internal.RootViews
 import java.util.*
 
 class StackRootView @JvmOverloads constructor(
-    context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
-) : CoordinatorLayout(context, attrs, defStyleAttr) {
+    context: Context,
+    val dispatcher: OnBackPressedDispatcher? = null
+) : CoordinatorLayout(context) {
 
-    internal val stack = ArrayList<FrameLayout>()
+    internal val stack = ArrayList<StackItem>()
     private val path = Path()
     private val pathRectF = RectF()
     private val radius = resources.getDimensionPixelSize(R.dimen.uikit_radius)
     private val topHeight: Float
     private var hasTransitionRunning: Boolean = false
-
-    internal val onBackPressedCallback = object : OnBackPressedCallback(false) {
-        override fun handleOnBackPressed() {
-            pop()
-        }
-    }
 
     init {
         background = ColorDrawable(Color.BLACK)
@@ -53,10 +48,15 @@ class StackRootView @JvmOverloads constructor(
         PopTransition().run()
     }
 
+    internal class StackItem(
+        val view: FrameLayout
+    ) {
+        var normalized: Float = 0f
+    }
+
     private inner class PushTransition(
         val view: View, val layoutParams: FrameLayout.LayoutParams?
     ) : Runnable {
-
         override fun run() {
             if (hasTransitionRunning) {
                 post(this)
@@ -67,8 +67,31 @@ class StackRootView @JvmOverloads constructor(
             wrapper.setPadding(0, topHeight.toInt(), 0, 0)
             wrapper.addView(view, layoutParams)
             wrapper.isClickable = true
-            val params = InnerParams()
-            val behavior = params.behavior
+            val params = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+            val behavior = BottomSheetBehavior<FrameLayout>()
+            val item = StackItem(wrapper)
+            behavior.skipCollapsed = true
+            behavior.isHideable = true
+            behavior.state = BottomSheetBehavior.STATE_HIDDEN
+            behavior.peekHeight = BottomSheetBehavior.PEEK_HEIGHT_AUTO
+            behavior.addBottomSheetCallback(object : BottomSheetCallback() {
+                override fun onStateChanged(bottomSheet: View, newState: Int) {
+
+                }
+
+                override fun onSlide(bottomSheet: View, slideOffset: Float) {
+                    if (slideOffset == -1f) {
+                        hasTransitionRunning = false
+                        if (stack.size > 0) {
+                            val top = stack.removeAt(stack.size - 1)
+                            top.view.removeAllViews()
+                            removeView(top.view)
+                        }
+                    }
+                    item.normalized = (slideOffset + 1) / 2
+                    invalidate()
+                }
+            })
             behavior.addBottomSheetCallback(object : BottomSheetCallback() {
                 override fun onSlide(bottomSheet: View, slideOffset: Float) {
                     if (slideOffset == 1f) {
@@ -81,19 +104,20 @@ class StackRootView @JvmOverloads constructor(
 
                 }
             })
-            addView(wrapper, params)
             wrapper.bringToFront()
-            stack.add(wrapper)
-            onBackPressedCallback.isEnabled = true
+            stack.add(item)
+            addView(wrapper, params)
+            dispatcher?.addCallback(object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    pop()
+                    remove()
+                }
+            })
             post { behavior.state = BottomSheetBehavior.STATE_EXPANDED }
         }
     }
 
-    private val FrameLayout.normalized: Float
-        get() = (layoutParams as InnerParams).normalized
-
     private inner class PopTransition : Runnable {
-
         override fun run() {
             if (hasTransitionRunning) {
                 post(this)
@@ -101,31 +125,9 @@ class StackRootView @JvmOverloads constructor(
             }
             if (stack.size > 0) {
                 hasTransitionRunning = true
-                val behavior = BottomSheetBehavior.from(stack.last())
+                val behavior = BottomSheetBehavior.from(stack.last().view)
                 behavior.state = BottomSheetBehavior.STATE_HIDDEN
             }
-        }
-    }
-
-    companion object {
-        private const val xRate = 0.1f
-        private const val yRate = 0.05f
-        private const val scaleRate = 0.1f
-        private const val alphaRate = 0.5f
-
-        fun push(
-            activity: Activity,
-            view: View,
-            layoutParams: FrameLayout.LayoutParams? = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT
-            )
-        ) {
-            RootViews.activities[activity]?.push(view, layoutParams)
-        }
-
-        fun pop(activity: Activity) {
-            RootViews.activities[activity]?.pop()
         }
     }
 
@@ -168,54 +170,35 @@ class StackRootView @JvmOverloads constructor(
         return result
     }
 
-    private inner class InnerParams :
-        CoordinatorLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT) {
-
-        var normalized: Float = 0f
-
-        override fun getBehavior(): BottomSheetBehavior<FrameLayout> {
-            @Suppress("UNCHECKED_CAST")
-            return super.getBehavior() as BottomSheetBehavior<FrameLayout>
-        }
-
-        init {
-            behavior = BottomSheetBehavior<FrameLayout>().apply {
-                skipCollapsed = true
-                isHideable = true
-                state = BottomSheetBehavior.STATE_HIDDEN
-                peekHeight = BottomSheetBehavior.PEEK_HEIGHT_AUTO
-                addBottomSheetCallback(object : BottomSheetCallback() {
-                    override fun onStateChanged(bottomSheet: View, newState: Int) {
-
-                    }
-
-                    override fun onSlide(bottomSheet: View, slideOffset: Float) {
-                        if (slideOffset == -1f) {
-                            hasTransitionRunning = false
-                            if (stack.size > 0) {
-                                val top = stack.removeAt(stack.size - 1)
-                                top.removeAllViews()
-                                removeView(top)
-                                if (stack.isEmpty()) {
-                                    onBackPressedCallback.isEnabled = false
-                                }
-                            }
-                        }
-                        normalized = (slideOffset + 1) / 2
-                        invalidate()
-                    }
-                })
-            }
-        }
-    }
-
     override fun drawChild(canvas: Canvas, child: View, drawingTime: Long): Boolean {
         if (stack.size > 0) {
-            val index = stack.indexOfLast { it == child }
+            val index = stack.indexOfLast { it.view == child }
             if (index != stack.size - 1) {
                 return drawChild(canvas, child, index + 1)
             }
         }
         return super.drawChild(canvas, child, drawingTime)
+    }
+
+    companion object {
+        private const val xRate = 0.1f
+        private const val yRate = 0.05f
+        private const val scaleRate = 0.1f
+        private const val alphaRate = 0.5f
+
+        fun push(
+            activity: Activity,
+            view: View,
+            layoutParams: FrameLayout.LayoutParams? = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        ) {
+            RootViews.activities[activity]?.push(view, layoutParams)
+        }
+
+        fun pop(activity: Activity) {
+            RootViews.activities[activity]?.pop()
+        }
     }
 }

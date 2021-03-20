@@ -15,7 +15,10 @@ internal object RootViews : Plugin() {
         val rootView = activity.window.decorView as ViewGroup
         val contentView = rootView.getChildAt(0)
         if (contentView !is StackRootView) {
-            val stackRootView = StackRootView(rootView.context)
+            val stackRootView = StackRootView(
+                rootView.context,
+                if (activity is AppCompatActivity) activity.onBackPressedDispatcher else null
+            )
             val childView = (0 until rootView.childCount).map {
                 rootView.getChildAt(it)
             }
@@ -25,12 +28,7 @@ internal object RootViews : Plugin() {
             }
             rootView.addView(stackRootView)
             activities[activity] = stackRootView
-            if (activity is AppCompatActivity) {
-                activity.onBackPressedDispatcher.addCallback(
-                    activity,
-                    stackRootView.onBackPressedCallback
-                )
-            }
+
         }
     }
 
