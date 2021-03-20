@@ -16,4 +16,7 @@
         <attr name="uikit_cornerRadius" />
         <attr name="uikit_shadowColor" format="color" />
     </declare-styleable>
+    <declare-styleable name="LinkedSlideBehavior_Layout">
+        <attr name="uikit_layout_slide_handler" format="reference"/>
+    </declare-styleable>
 </resources>

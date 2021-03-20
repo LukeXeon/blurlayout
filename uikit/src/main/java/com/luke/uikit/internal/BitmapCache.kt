@@ -11,7 +11,7 @@ import com.luke.uikit.bitmappool.LruPoolStrategy
 import java.util.*
 
 internal object BitmapCache : Plugin() {
-    private val entries = HashMap<Bitmap, Item>()
+    private val entries = Collections.newSetFromMap(WeakHashMap<Item, Boolean>())
     private val bitmaps: LruBitmapPool
     private val handler = object : ThreadLocal<Handler>() {
         override fun initialValue(): Handler? {
@@ -27,7 +27,7 @@ internal object BitmapCache : Plugin() {
             override fun removeLast(): Bitmap {
                 val bitmap = strategy.removeLast()
                 synchronized(entries) {
-                    entries.remove(bitmap)
+                    entries.remove(entries.find { it.bitmap == bitmap })
                 }
                 return bitmap
             }
@@ -46,7 +46,9 @@ internal object BitmapCache : Plugin() {
     operator fun get(width: Int, height: Int): Item {
         val bitmap = bitmaps[width, height, Bitmap.Config.ARGB_8888]
         return synchronized(entries) {
-            entries.getOrPut(bitmap) { Item(bitmap) }
+            val item = entries.find { it.bitmap == bitmap } ?: Item(bitmap)
+            entries.add(item)
+            item
         }
     }
 
