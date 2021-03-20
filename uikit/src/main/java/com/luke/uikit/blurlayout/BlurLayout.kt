@@ -10,7 +10,6 @@ import android.renderscript.Element
 import android.renderscript.RenderScript
 import android.renderscript.ScriptIntrinsicBlur
 import android.util.AttributeSet
-import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
@@ -38,6 +37,7 @@ class BlurLayout @JvmOverloads constructor(
     var cornerRadius: Int = 0
         set(value) {
             field = max(0, value)
+            invalidate()
         }
 
     var blurSampling: Float = 4f
@@ -52,6 +52,10 @@ class BlurLayout @JvmOverloads constructor(
 
     @ColorInt
     var maskColor: Int = Color.TRANSPARENT
+        set(value) {
+            field = value
+            invalidate()
+        }
 
     init {
         if (attrs != null) {
@@ -64,20 +68,19 @@ class BlurLayout @JvmOverloads constructor(
             maskColor = a.getColor(R.styleable.BlurLayout_uikit_maskColor, Color.TRANSPARENT)
             a.recycle()
         }
+        setWillNotDraw(false)
     }
 
     private inner class DrawingTask(
         val scaledWidth: Int,
         val scaledHeight: Int,
-        val cornerRadius: Int,
         val blurSampling: Float,
         val blurRadius: Float,
-        val maskColor: Int,
     ) : Runnable {
 
         override fun run() {
-            val entry = BitmapCache[scaledWidth, scaledHeight]
-            val bitmap = entry.bitmap
+            val item = BitmapCache[scaledWidth, scaledHeight]
+            val bitmap = item.bitmap
             // 在后台慢慢用软件画图来画，防止主线程卡住
             // 因为软件绘制实在是太慢了
             backgroundCanvas.setBitmap(bitmap)
@@ -89,7 +92,7 @@ class BlurLayout @JvmOverloads constructor(
                     backgroundCanvas.drawPicture(recorder)
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    BitmapCache.put(entry)
+                    BitmapCache.put(item)
                     return
                 } finally {
                     backgroundCanvas.restore()
@@ -98,15 +101,33 @@ class BlurLayout @JvmOverloads constructor(
             }
             processBitmap(blurRadius, bitmap)
             bitmap.prepareToDraw()
-            try {
-                val canvas = drawer.lockCanvas() ?: return
-                drawInBackground(canvas, entry)
-                drawer.unlockCanvasAndPost(canvas)
-            } finally {
-                BitmapCache.put(entry)
+            post {
+                clearBackground()
+                background = item
+                invalidate()
             }
         }
 
+        @WorkerThread
+        private fun processBitmap(blurRadius: Float, bitmap: Bitmap) {
+            val radius = max(25f, min(0f, blurRadius))
+            var input: Allocation? = null
+            var output: Allocation? = null
+            try {
+                input = Allocation.createFromBitmap(
+                    rs, bitmap, Allocation.MipmapControl.MIPMAP_NONE,
+                    Allocation.USAGE_SCRIPT
+                )
+                output = Allocation.createTyped(rs, input.type)
+                blur.setInput(input)
+                blur.setRadius(radius)
+                blur.forEach(output)
+                output.copyTo(bitmap)
+            } finally {
+                input?.destroy()
+                output?.destroy()
+            }
+        }
     }
 
     private val taskToken = Any()
@@ -117,21 +138,13 @@ class BlurLayout @JvmOverloads constructor(
     private val maskPaint = Paint()
     private val drawingRectF = RectF()
     private val drawingRect = Rect()
-    private val drawer: TextureView = TextureView(context)
     private val drawingThread: Handler
     private val rs = RenderScript.create(context)
     private val blur = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
 
+    private var background: BitmapCache.Item? = null
     private var recordingCanvas: Canvas? = null
     private var isPaused: Boolean = false
-
-    fun onPause() {
-        isPaused = true
-    }
-
-    fun onResume() {
-        isPaused = false
-    }
 
     init {
         val thread = HandlerThread(
@@ -139,13 +152,25 @@ class BlurLayout @JvmOverloads constructor(
             Process.THREAD_PRIORITY_DISPLAY
         )
         thread.start()
-        attachViewToParent(
-            drawer,
-            0,
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
-        )
         drawingThread = Handler(thread.looper)
-        drawer.isOpaque = false
+    }
+
+    fun onPause() {
+        clearBackground()
+        isPaused = true
+    }
+
+    fun onResume() {
+        clearBackground()
+        isPaused = false
+    }
+
+    private fun clearBackground() {
+        val old = background
+        if (old != null) {
+            BitmapCache.put(old)
+        }
+        background = null
     }
 
     private fun checkStackTop(v: View): Boolean {
@@ -189,28 +214,49 @@ class BlurLayout @JvmOverloads constructor(
         return false
     }
 
-    @WorkerThread
-    private fun processBitmap(blurRadius: Float, bitmap: Bitmap) {
-        val radius = max(25f, min(0f, blurRadius))
-        var input: Allocation? = null
-        var output: Allocation? = null
-        try {
-            input = Allocation.createFromBitmap(
-                rs, bitmap, Allocation.MipmapControl.MIPMAP_NONE,
-                Allocation.USAGE_SCRIPT
+    override fun onPreDraw(): Boolean {
+        if (checkDraw()) {
+            getGlobalVisibleRect(visibleRect)
+            val width = visibleRect.width()
+            val height = visibleRect.height()
+            val blurSampling = blurSampling
+            val scaledWidth = (width / blurSampling).toInt()
+            val scaledHeight = (height / blurSampling).toInt()
+            if (scaledWidth * scaledHeight == 0) {
+                return true
+            }
+            synchronized(recorder) {
+                // 使用Picture来记录绘制内容
+                // 因为它只记录绘制的操作，所以这比直接用Canvas要更快
+                // 不需要绘制整个屏幕，只需要绘制View底下那一层就可以了
+                val canvas = recorder.beginRecording(width, height)
+                // 转换canvas来到View的绝对位置
+                canvas.translate(
+                    -visibleRect.left.toFloat(),
+                    -visibleRect.top.toFloat()
+                )
+                // 设置recordingCanvas用来识别，防止画到自己
+                recordingCanvas = canvas
+                rootView.draw(canvas)
+                recordingCanvas = null
+                // 结束录制
+                recorder.endRecording()
+            }
+            drawingThread.removeCallbacksAndMessages(taskToken)
+            HandlerCompat.postDelayed(
+                drawingThread, DrawingTask(
+                    scaledWidth,
+                    scaledHeight,
+                    blurSampling,
+                    blurRadius,
+                ),
+                taskToken,
+                0
             )
-            output = Allocation.createTyped(rs, input.type)
-            blur.setInput(input)
-            blur.setRadius(radius)
-            blur.forEach(output)
-            output.copyTo(bitmap)
-        } finally {
-            input?.destroy()
-            output?.destroy()
         }
+        return true
     }
 
-    @WorkerThread
     private fun drawInBackground(canvas: Canvas, item: BitmapCache.Item) {
         if (cornerRadius > 0) {
             canvas.save()
@@ -294,67 +340,20 @@ class BlurLayout @JvmOverloads constructor(
         }
     }
 
-    override fun onPreDraw(): Boolean {
-        if (checkDraw()) {
-            getGlobalVisibleRect(visibleRect)
-            val width = visibleRect.width()
-            val height = visibleRect.height()
-            val blurSampling = blurSampling
-            val scaledWidth = (width / blurSampling).toInt()
-            val scaledHeight = (height / blurSampling).toInt()
-            if (scaledWidth * scaledHeight == 0) {
-                return true
-            }
-            synchronized(recorder) {
-                // 使用Picture来记录绘制内容
-                // 因为它只记录绘制的操作，所以这比直接用Canvas要更快
-                // 不需要绘制整个屏幕，只需要绘制View底下那一层就可以了
-                val canvas = recorder.beginRecording(width, height)
-                // 转换canvas来到View的绝对位置
-                canvas.translate(
-                    -visibleRect.left.toFloat(),
-                    -visibleRect.top.toFloat()
-                )
-                // 设置recordingCanvas用来识别，防止画到自己
-                recordingCanvas = canvas
-                rootView.draw(canvas)
-                recordingCanvas = null
-                // 结束录制
-                recorder.endRecording()
-            }
-            drawingThread.removeCallbacksAndMessages(taskToken)
-            HandlerCompat.postDelayed(
-                drawingThread, DrawingTask(
-                    scaledWidth,
-                    scaledHeight,
-                    cornerRadius,
-                    blurSampling,
-                    blurRadius,
-                    maskColor
-                ),
-                taskToken,
-                0
-            )
+    override fun onDraw(canvas: Canvas) {
+        if (canvas != recordingCanvas) {
+            drawInBackground(canvas, background ?: return)
         }
-        if (indexOfChild(drawer) != 0) {
-            removeView(drawer)
-            addView(drawer, 0)
-        }
-        return true
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        clearBackground()
         viewTreeObserver.addOnPreDrawListener(this)
     }
 
-    override fun onViewRemoved(child: View?) {
-        if (child == drawer) {
-            throw UnsupportedOperationException()
-        }
-    }
-
     override fun onDetachedFromWindow() {
+        clearBackground()
         viewTreeObserver.removeOnPreDrawListener(this)
         drawingThread.removeCallbacksAndMessages(taskToken)
         super.onDetachedFromWindow()

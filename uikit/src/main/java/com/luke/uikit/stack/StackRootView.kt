@@ -49,7 +49,8 @@ class StackRootView @JvmOverloads constructor(
     }
 
     internal class StackItem(
-        val view: FrameLayout
+        val view: FrameLayout,
+        val callback: OnBackPressedCallback? = null
     ) {
         var normalized: Float = 0f
     }
@@ -69,7 +70,18 @@ class StackRootView @JvmOverloads constructor(
             wrapper.isClickable = true
             val params = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
             val behavior = BottomSheetBehavior<FrameLayout>()
-            val item = StackItem(wrapper)
+            val item = StackItem(
+                wrapper, if (dispatcher != null) {
+                    object : OnBackPressedCallback(true) {
+                        override fun handleOnBackPressed() {
+                            pop()
+                        }
+                    }.apply {
+                        dispatcher.addCallback(this)
+                    }
+                } else null
+            )
+            params.behavior = behavior
             behavior.skipCollapsed = true
             behavior.isHideable = true
             behavior.state = BottomSheetBehavior.STATE_HIDDEN
@@ -107,12 +119,6 @@ class StackRootView @JvmOverloads constructor(
             wrapper.bringToFront()
             stack.add(item)
             addView(wrapper, params)
-            dispatcher?.addCallback(object : OnBackPressedCallback(true) {
-                override fun handleOnBackPressed() {
-                    pop()
-                    remove()
-                }
-            })
             post { behavior.state = BottomSheetBehavior.STATE_EXPANDED }
         }
     }
@@ -125,7 +131,9 @@ class StackRootView @JvmOverloads constructor(
             }
             if (stack.size > 0) {
                 hasTransitionRunning = true
-                val behavior = BottomSheetBehavior.from(stack.last().view)
+                val last = stack.last()
+                val behavior = BottomSheetBehavior.from(last.view)
+                last.callback?.remove()
                 behavior.state = BottomSheetBehavior.STATE_HIDDEN
             }
         }
