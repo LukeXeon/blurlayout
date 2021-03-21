@@ -66,6 +66,7 @@ import com.google.android.material.shape.ShapeAppearanceModel.CornerSizeUnaryOpe
 import com.google.android.material.shape.ShapeAppearancePathProvider.PathListener;
 import com.google.android.material.shape.ShapePath.ShadowCompatOperation;
 import com.luke.uikit.internal.BitmapCache;
+import com.luke.uikit.internal.DrawingBitmap;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -990,7 +991,7 @@ public class UseCacheShapeDrawable extends Drawable implements TintAwareDrawable
 
     // Drawing the shadow in a bitmap lets us use the clear paint rather than using clipPath to
     // prevent drawing shadow under the shape. clipPath has problems :-/
-    BitmapCache.Item item = BitmapCache.get(
+    DrawingBitmap item = BitmapCache.get(
             (int) pathBounds.width() + drawableState.shadowCompatRadius * 2 + pathExtraWidth,
             (int) pathBounds.height() + drawableState.shadowCompatRadius * 2 + pathExtraHeight
     );

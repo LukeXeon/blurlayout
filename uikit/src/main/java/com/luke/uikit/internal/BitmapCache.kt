@@ -2,16 +2,17 @@ package com.luke.uikit.internal
 
 import android.content.res.Resources
 import android.graphics.Bitmap
-import android.graphics.BitmapShader
-import android.graphics.Shader
+import android.graphics.Bitmap.Config.*
 import android.os.Handler
 import android.os.Looper
 import com.luke.uikit.bitmappool.LruBitmapPool
+import com.luke.uikit.bitmappool.LruBitmapPool.getDefaultStrategy
 import com.luke.uikit.bitmappool.LruPoolStrategy
 import java.util.*
+import java.util.Collections.newSetFromMap
 
 internal object BitmapCache : Plugin() {
-    private val entries = Collections.newSetFromMap(WeakHashMap<Item, Boolean>())
+    private val entries = newSetFromMap(WeakHashMap<DrawingBitmap, Boolean>())
     private val bitmaps: LruBitmapPool
     private val handler = object : ThreadLocal<Handler>() {
         override fun initialValue(): Handler? {
@@ -22,16 +23,15 @@ internal object BitmapCache : Plugin() {
     init {
         val displayMetrics = Resources.getSystem().displayMetrics
         val size = Int.SIZE_BYTES * displayMetrics.widthPixels * displayMetrics.heightPixels
-        val strategy = LruBitmapPool.getDefaultStrategy()
-        bitmaps = LruBitmapPool(size, object : LruPoolStrategy by strategy {
+        bitmaps = LruBitmapPool(size, object : ProxyStrategy(getDefaultStrategy()) {
             override fun removeLast(): Bitmap {
-                val bitmap = strategy.removeLast()
+                val bitmap = super.removeLast()
                 synchronized(entries) {
                     entries.remove(entries.find { it.bitmap == bitmap })
                 }
                 return bitmap
             }
-        }, setOf(Bitmap.Config.ARGB_8888))
+        }, setOf(ARGB_8888))
     }
 
     override fun onLowMemory() {
@@ -43,22 +43,22 @@ internal object BitmapCache : Plugin() {
     }
 
     @JvmStatic
-    operator fun get(width: Int, height: Int): Item {
-        val bitmap = bitmaps[width, height, Bitmap.Config.ARGB_8888]
+    operator fun get(width: Int, height: Int): DrawingBitmap {
+        val bitmap = bitmaps[width, height, ARGB_8888]
         return synchronized(entries) {
-            val item = entries.find { it.bitmap == bitmap } ?: Item(bitmap)
-            entries.add(item)
-            item
+            (entries.find { it.bitmap == bitmap } ?: DrawingBitmap(bitmap)).also {
+                entries.add(it)
+            }
         }
     }
 
     @JvmStatic
-    fun put(item: Item) {
+    fun put(item: DrawingBitmap) {
         bitmaps.put(item.bitmap)
     }
 
     @JvmStatic
-    fun putDelay(item: Item) {
+    fun putDelay(item: DrawingBitmap) {
         val h = handler.get()
         if (h != null) {
             h.post { put(item) }
@@ -67,13 +67,6 @@ internal object BitmapCache : Plugin() {
         }
     }
 
-    class Item(val bitmap: Bitmap) {
-        val shader by lazy {
-            BitmapShader(
-                bitmap,
-                Shader.TileMode.MIRROR,
-                Shader.TileMode.MIRROR
-            )
-        }
-    }
+    private open class ProxyStrategy(strategy: LruPoolStrategy) : LruPoolStrategy by strategy
+
 }

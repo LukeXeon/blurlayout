@@ -10,7 +10,7 @@ import androidx.annotation.Keep
 @Keep
 internal class PluginManager : ContentProvider() {
 
-    private val plugins = arrayOf(RootViews, BitmapCache)
+    private val plugins: Array<Plugin> = arrayOf(RootViews, BitmapCache)
 
     override fun onCreate(): Boolean {
         val ctx = context

@@ -9,7 +9,12 @@ import java.util.*
 
 internal object RootViews : Plugin() {
 
-    val activities = WeakHashMap<Activity, StackRootView>()
+    private val activities = WeakHashMap<Activity, StackRootView>()
+
+    @JvmStatic
+    operator fun get(activity: Activity): StackRootView? {
+        return activities[activity]
+    }
 
     override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
         val rootView = activity.window.decorView as ViewGroup

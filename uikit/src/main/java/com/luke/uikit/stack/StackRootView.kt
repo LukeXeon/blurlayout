@@ -202,11 +202,11 @@ class StackRootView @JvmOverloads constructor(
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         ) {
-            RootViews.activities[activity]?.push(view, layoutParams)
+            RootViews[activity]?.push(view, layoutParams)
         }
 
         fun pop(activity: Activity) {
-            RootViews.activities[activity]?.pop()
+            RootViews[activity]?.pop()
         }
     }
 }
