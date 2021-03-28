@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Shader
 
-class DrawingBitmap(val bitmap: Bitmap) {
+class CachingBitmap(val bitmap: Bitmap) {
     val shader by lazy {
         BitmapShader(
             bitmap,

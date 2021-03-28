@@ -21,7 +21,7 @@ import androidx.annotation.WorkerThread
 import androidx.core.os.HandlerCompat
 import com.luke.uikit.R
 import com.luke.uikit.internal.BitmapCache
-import com.luke.uikit.internal.DrawingBitmap
+import com.luke.uikit.internal.CachingBitmap
 import com.luke.uikit.stack.StackRootView
 import kotlin.math.max
 import kotlin.math.min
@@ -142,7 +142,7 @@ class BlurLayout @JvmOverloads constructor(
     private val rs = RenderScript.create(context)
     private val blur = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
 
-    private var background: DrawingBitmap? = null
+    private var background: CachingBitmap? = null
         set(value) {
             field = value
             invalidate()
@@ -261,7 +261,7 @@ class BlurLayout @JvmOverloads constructor(
         return true
     }
 
-    private fun drawInBackground(canvas: Canvas, item: DrawingBitmap) {
+    private fun drawInBackground(canvas: Canvas, item: CachingBitmap) {
         if (cornerRadius > 0) {
             canvas.save()
             // 经过渲染的Bitmap由于缩放的关系

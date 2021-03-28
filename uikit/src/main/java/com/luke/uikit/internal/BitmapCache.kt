@@ -12,7 +12,7 @@ import java.util.*
 import java.util.Collections.newSetFromMap
 
 internal object BitmapCache : Plugin() {
-    private val entries = newSetFromMap(WeakHashMap<DrawingBitmap, Boolean>())
+    private val entries = newSetFromMap(WeakHashMap<CachingBitmap, Boolean>())
     private val bitmaps: LruBitmapPool
     private val handler = object : ThreadLocal<Handler>() {
         override fun initialValue(): Handler? {
@@ -43,22 +43,22 @@ internal object BitmapCache : Plugin() {
     }
 
     @JvmStatic
-    operator fun get(width: Int, height: Int): DrawingBitmap {
+    operator fun get(width: Int, height: Int): CachingBitmap {
         val bitmap = bitmaps[width, height, ARGB_8888]
         return synchronized(entries) {
-            (entries.find { it.bitmap == bitmap } ?: DrawingBitmap(bitmap)).also {
+            (entries.find { it.bitmap == bitmap } ?: CachingBitmap(bitmap)).also {
                 entries.add(it)
             }
         }
     }
 
     @JvmStatic
-    fun put(item: DrawingBitmap) {
+    fun put(item: CachingBitmap) {
         bitmaps.put(item.bitmap)
     }
 
     @JvmStatic
-    fun putDelay(item: DrawingBitmap) {
+    fun putDelay(item: CachingBitmap) {
         val h = handler.get()
         if (h != null) {
             h.post { put(item) }

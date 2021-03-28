@@ -13,6 +13,8 @@ import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.OnBackPressedDispatcher
 import androidx.coordinatorlayout.widget.CoordinatorLayout
+import androidx.core.content.res.ResourcesCompat
+import androidx.startup.AppInitializer
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetBehavior.BottomSheetCallback
 import com.luke.uikit.R
@@ -148,9 +150,16 @@ class StackRootView @JvmOverloads constructor(
         var cur = stack.size - 1
         while (cur >= index) {
             val n = stack[cur].normalized
-            val scale = 1 - n * scaleRate
-            val x = xRate * width / 2 * n
-            val y = yRate * height * n
+            val scale =
+                1 - n * ResourcesCompat.getFloat(
+                    resources, R.dimen.uikit_stack_layout_scale_rate
+                )
+            val x = ResourcesCompat.getFloat(
+                resources, R.dimen.uikit_stack_layout_x_rate
+            ) * width / 2 * n
+            val y = ResourcesCompat.getFloat(
+                resources, R.dimen.uikit_stack_layout_y_rate
+            ) * height * n
             canvas.translate(x, y)
             if (cur != 0) {
                 canvas.translate(0f, -topHeight * n)
@@ -173,7 +182,9 @@ class StackRootView @JvmOverloads constructor(
         val result = super.drawChild(canvas, child, drawingTime)
         canvas.restore()
         val n = if (index == stack.size - 1) stack[index].normalized else 1f
-        val alpha = (alphaRate * n * 255).toInt()
+        val alpha = (ResourcesCompat.getFloat(
+            resources, R.dimen.uikit_stack_layout_alpha_rate
+        ) * n * 255).toInt()
         canvas.drawARGB(alpha, 0, 0, 0)
         return result
     }
@@ -189,11 +200,6 @@ class StackRootView @JvmOverloads constructor(
     }
 
     companion object {
-        private const val xRate = 0.1f
-        private const val yRate = 0.05f
-        private const val scaleRate = 0.1f
-        private const val alphaRate = 0.5f
-
         fun push(
             activity: Activity,
             view: View,
