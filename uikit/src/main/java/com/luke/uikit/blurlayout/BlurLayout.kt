@@ -261,7 +261,7 @@ class BlurLayout @JvmOverloads constructor(
         return true
     }
 
-    private fun drawInBackground(canvas: Canvas, item: CachingBitmap) {
+    private fun doDraw(canvas: Canvas, item: CachingBitmap) {
         if (cornerRadius > 0) {
             canvas.save()
             // 经过渲染的Bitmap由于缩放的关系
@@ -346,7 +346,7 @@ class BlurLayout @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         if (canvas != recordingCanvas) {
-            drawInBackground(canvas, background ?: return)
+            doDraw(canvas, background ?: return)
         }
     }
 
