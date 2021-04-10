@@ -11,10 +11,7 @@
             android:multiprocess="true"
             tools:node="merge">
             <meta-data
-                android:name="com.luke.uikit.internal.BitmapCacheInitializer"
-                android:value="@string/androidx_startup" />
-            <meta-data
-                android:name="com.luke.uikit.internal.RootViewsInitializer"
+                android:name="com.luke.uikit.internal.PluginInitializer"
                 android:value="@string/androidx_startup" />
         </provider>
     </application>

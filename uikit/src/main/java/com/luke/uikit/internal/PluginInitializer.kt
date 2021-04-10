@@ -4,19 +4,19 @@ import android.app.Application
 import android.content.Context
 import androidx.startup.Initializer
 
-internal abstract class PluginInitializer<T : Plugin> : Initializer<T> {
+internal class PluginInitializer : Initializer<Unit> {
 
-    abstract fun create(context: Application): T
+    private val plugins = arrayOf(BitmapCache, RootViews)
 
-    final override fun create(context: Context): T {
+    override fun create(context: Context) {
         val app = context.applicationContext as Application
-        val plugin = create(app)
-        app.registerActivityLifecycleCallbacks(plugin)
-        app.registerComponentCallbacks(plugin)
-        return plugin
+        for (plugin in plugins) {
+            app.registerActivityLifecycleCallbacks(plugin)
+            app.registerComponentCallbacks(plugin)
+        }
     }
 
-    override fun dependencies(): MutableList<Class<out Initializer<*>>> {
-        return mutableListOf()
+    override fun dependencies(): List<Class<out Initializer<*>>> {
+        return emptyList()
     }
 }
