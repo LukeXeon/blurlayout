@@ -140,6 +140,7 @@ class BlurLayout @JvmOverloads constructor(
     private val rs = RenderScript.create(context)
     private val blur = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
 
+    private var backgroundShader: BitmapShader? = null
     private var background: Bitmap? = null
         set(value) {
             field = value
@@ -168,6 +169,7 @@ class BlurLayout @JvmOverloads constructor(
     }
 
     private fun clearBackground() {
+        backgroundShader = null
         val old = background
         if (old != null) {
             BitmapCache.pool.put(old)
@@ -243,6 +245,14 @@ class BlurLayout @JvmOverloads constructor(
 
     private fun doDraw(canvas: Canvas, item: Bitmap) {
         if (cornerRadius > 0) {
+            if (backgroundShader == null) {
+                backgroundShader = BitmapShader(
+                    item,
+                    Shader.TileMode.MIRROR,
+                    Shader.TileMode.MIRROR
+                )
+            }
+            val backgroundShader = backgroundShader ?: return
             canvas.save()
             // 经过渲染的Bitmap由于缩放的关系
             // 可能会比View小，所以要做特殊处理，把它放大回去
@@ -265,7 +275,7 @@ class BlurLayout @JvmOverloads constructor(
                     reset()
                     isFilterBitmap = true
                     isAntiAlias = true
-                    shader = BitmapCache.getShader(item)
+                    shader = backgroundShader
                 }
             )
             canvas.drawRoundRect(

@@ -4,36 +4,16 @@ import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
-import android.graphics.BitmapShader
-import android.graphics.Shader
 import androidx.annotation.Keep
 import androidx.startup.Initializer
 import com.bumptech.glide.Glide
 import com.luke.uikit.bitmap.pool.BitmapPool
 import com.luke.uikit.bitmap.pool.LruBitmapPool
-import java.lang.ref.WeakReference
-import java.util.*
 
 @Keep
 internal class BitmapCache : Initializer<Unit> {
 
     companion object {
-        private val shaderCache = WeakHashMap<Bitmap, WeakReference<BitmapShader>>()
-
-        fun getShader(bitmap: Bitmap): BitmapShader {
-            var shader = shaderCache[bitmap]?.get()
-            if (shader == null) {
-                shader = BitmapShader(
-                    bitmap,
-                    Shader.TileMode.MIRROR,
-                    Shader.TileMode.MIRROR
-                )
-                val ref = WeakReference(shader)
-                shaderCache[bitmap] = ref
-            }
-            return shader
-        }
-
         lateinit var pool: BitmapPool
             private set
     }
