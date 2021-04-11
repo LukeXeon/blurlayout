@@ -1,72 +1,99 @@
 package com.luke.uikit.internal
 
-import android.content.res.Resources
+import android.content.ComponentCallbacks2
+import android.content.Context
+import android.content.res.Configuration
 import android.graphics.Bitmap
-import android.graphics.Bitmap.Config.*
-import android.os.Handler
-import android.os.Looper
-import com.luke.uikit.bitmappool.LruBitmapPool
-import com.luke.uikit.bitmappool.LruBitmapPool.getDefaultStrategy
-import com.luke.uikit.bitmappool.LruPoolStrategy
+import android.graphics.BitmapShader
+import android.graphics.Shader
+import androidx.annotation.Keep
+import androidx.startup.Initializer
+import com.bumptech.glide.Glide
+import com.luke.uikit.bitmap.pool.BitmapPool
+import com.luke.uikit.bitmap.pool.LruBitmapPool
+import java.lang.ref.WeakReference
 import java.util.*
-import java.util.Collections.newSetFromMap
 
-internal object BitmapCache : Plugin() {
-    private val entries = newSetFromMap(WeakHashMap<CachingBitmap, Boolean>())
-    private val bitmaps: LruBitmapPool
-    private val handler = object : ThreadLocal<Handler>() {
-        override fun initialValue(): Handler? {
-            return Looper.myLooper()?.let { Handler(it) }
+@Keep
+internal class BitmapCache : Initializer<Unit> {
+
+    companion object {
+        private val shaderCache = WeakHashMap<Bitmap, WeakReference<BitmapShader>>()
+
+        fun getShader(bitmap: Bitmap): BitmapShader {
+            var shader = shaderCache[bitmap]?.get()
+            if (shader == null) {
+                shader = BitmapShader(
+                    bitmap,
+                    Shader.TileMode.MIRROR,
+                    Shader.TileMode.MIRROR
+                )
+                val ref = WeakReference(shader)
+                shaderCache[bitmap] = ref
+            }
+            return shader
         }
+
+        lateinit var pool: BitmapPool
+            private set
     }
 
-    init {
-        val displayMetrics = Resources.getSystem().displayMetrics
-        val size = Int.SIZE_BYTES * displayMetrics.widthPixels * displayMetrics.heightPixels
-        bitmaps = LruBitmapPool(size, object : ProxyStrategy(getDefaultStrategy()) {
-            override fun removeLast(): Bitmap {
-                val bitmap = super.removeLast()
-                synchronized(entries) {
-                    entries.remove(entries.find { it.bitmap == bitmap })
+    override fun create(context: Context) {
+        try {
+            val bitmapPool = Glide.get(context).bitmapPool
+            pool = object : BitmapPool {
+                override fun getMaxSize(): Int {
+                    return bitmapPool.maxSize.toInt()
                 }
-                return bitmap
+
+                override fun setSizeMultiplier(sizeMultiplier: Float) {
+                    bitmapPool.setSizeMultiplier(sizeMultiplier)
+                }
+
+                override fun put(bitmap: Bitmap?) {
+                    bitmapPool.put(bitmap)
+                }
+
+                override fun get(width: Int, height: Int, config: Bitmap.Config?): Bitmap {
+                    return bitmapPool.get(width, height, config)
+                }
+
+                override fun getDirty(width: Int, height: Int, config: Bitmap.Config?): Bitmap {
+                    return bitmapPool.getDirty(width, height, config)
+                }
+
+                override fun clearMemory() {
+                    bitmapPool.clearMemory()
+                }
+
+                override fun trimMemory(level: Int) {
+                    bitmapPool.trimMemory(level)
+                }
+
             }
-        }, setOf(ARGB_8888))
-    }
+        } catch (e: Throwable) {
+            val displayMetrics = context.resources.displayMetrics
+            val size = Int.SIZE_BYTES * displayMetrics.widthPixels * displayMetrics.heightPixels
+            val bitmapPool = LruBitmapPool(size)
+            context.registerComponentCallbacks(object : ComponentCallbacks2 {
+                override fun onConfigurationChanged(newConfig: Configuration) {
 
-    override fun onLowMemory() {
-        bitmaps.clearMemory()
-    }
+                }
 
-    override fun onTrimMemory(level: Int) {
-        bitmaps.trimMemory(level)
-    }
+                override fun onLowMemory() {
+                    bitmapPool.clearMemory()
+                }
 
-    @JvmStatic
-    operator fun get(width: Int, height: Int): CachingBitmap {
-        val bitmap = bitmaps[width, height, ARGB_8888]
-        return synchronized(entries) {
-            (entries.find { it.bitmap == bitmap } ?: CachingBitmap(bitmap)).also {
-                entries.add(it)
-            }
+                override fun onTrimMemory(level: Int) {
+                    bitmapPool.trimMemory(level)
+                }
+
+            })
+            pool = bitmapPool
         }
     }
 
-    @JvmStatic
-    fun put(item: CachingBitmap) {
-        bitmaps.put(item.bitmap)
+    override fun dependencies(): List<Class<out Initializer<*>>> {
+        return emptyList()
     }
-
-    @JvmStatic
-    fun putDelay(item: CachingBitmap) {
-        val h = handler.get()
-        if (h != null) {
-            h.post { put(item) }
-        } else {
-            put(item)
-        }
-    }
-
-    private open class ProxyStrategy(strategy: LruPoolStrategy) : LruPoolStrategy by strategy
-
 }

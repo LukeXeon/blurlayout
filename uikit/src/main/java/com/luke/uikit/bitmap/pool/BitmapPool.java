@@ -15,23 +15,27 @@
  *    limitations under the License.
  */
 
-package com.luke.uikit.bitmappool;
+package com.luke.uikit.bitmap.pool;
 
 import android.graphics.Bitmap;
 
 /**
  * Created by amitshekhar on 17/06/16.
  */
-public interface LruPoolStrategy {
+public interface BitmapPool {
+
+    int getMaxSize();
+
+    void setSizeMultiplier(float sizeMultiplier);
+
     void put(Bitmap bitmap);
 
     Bitmap get(int width, int height, Bitmap.Config config);
 
-    Bitmap removeLast();
+    Bitmap getDirty(int width, int height, Bitmap.Config config);
 
-    String logBitmap(Bitmap bitmap);
+    void clearMemory();
 
-    String logBitmap(int width, int height, Bitmap.Config config);
-
-    int getSize(Bitmap bitmap);
+    void trimMemory(int level);
 }
+

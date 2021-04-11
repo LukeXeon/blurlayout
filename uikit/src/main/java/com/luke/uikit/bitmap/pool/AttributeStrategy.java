@@ -15,7 +15,7 @@
  *    limitations under the License.
  */
 
-package com.luke.uikit.bitmappool;
+package com.luke.uikit.bitmap.pool;
 
 import android.graphics.Bitmap;
 

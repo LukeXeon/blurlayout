@@ -11,7 +11,10 @@
             android:multiprocess="true"
             tools:node="merge">
             <meta-data
-                android:name="com.luke.uikit.internal.PluginInitializer"
+                android:name="com.luke.uikit.internal.BitmapCache"
+                android:value="@string/androidx_startup" />
+            <meta-data
+                android:name="com.luke.uikit.internal.StackRootViews"
                 android:value="@string/androidx_startup" />
         </provider>
     </application>

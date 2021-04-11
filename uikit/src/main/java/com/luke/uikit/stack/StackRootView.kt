@@ -9,29 +9,30 @@ import android.graphics.RectF
 import android.graphics.drawable.ColorDrawable
 import android.util.TypedValue
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.OnBackPressedDispatcher
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.content.res.ResourcesCompat
-import androidx.startup.AppInitializer
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetBehavior.BottomSheetCallback
 import com.luke.uikit.R
-import com.luke.uikit.internal.RootViews
+import com.luke.uikit.internal.StackRootViews
 import java.util.*
 
-class StackRootView @JvmOverloads constructor(
-    context: Context,
-    val dispatcher: OnBackPressedDispatcher? = null
+class StackRootView(
+    context: Context
 ) : CoordinatorLayout(context) {
 
-    internal val stack = ArrayList<StackItem>()
+    private val stack = ArrayList<StackItem>()
     private val path = Path()
     private val pathRectF = RectF()
     private val radius = resources.getDimensionPixelSize(R.dimen.uikit_radius)
     private val topHeight: Float
     private var hasTransitionRunning: Boolean = false
+
+    var dispatcher: OnBackPressedDispatcher? = null
 
     init {
         background = ColorDrawable(Color.BLACK)
@@ -72,6 +73,7 @@ class StackRootView @JvmOverloads constructor(
             wrapper.isClickable = true
             val params = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
             val behavior = BottomSheetBehavior<FrameLayout>()
+            val dispatcher = dispatcher
             val item = StackItem(
                 wrapper, if (dispatcher != null) {
                     object : OnBackPressedCallback(true) {
@@ -208,11 +210,29 @@ class StackRootView @JvmOverloads constructor(
                 FrameLayout.LayoutParams.MATCH_PARENT
             )
         ) {
-            RootViews[activity]?.push(view, layoutParams)
+            StackRootViews[activity]?.push(view, layoutParams)
         }
 
         fun pop(activity: Activity) {
-            RootViews[activity]?.pop()
+            StackRootViews[activity]?.pop()
+        }
+
+        internal fun checkStackTop(v: View): Boolean {
+            var c2: View = v
+            var p2: ViewGroup? = v.parent as? ViewGroup
+            while (p2 != null && p2 !is StackRootView) {
+                c2 = p2
+                p2 = p2.parent as? ViewGroup
+            }
+            return if (p2 is StackRootView) {
+                if (p2.stack.isNotEmpty()) {
+                    p2.stack.last().view == c2
+                } else {
+                    true
+                }
+            } else {
+                true
+            }
         }
     }
 }

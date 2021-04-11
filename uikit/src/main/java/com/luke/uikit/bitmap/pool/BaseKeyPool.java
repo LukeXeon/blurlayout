@@ -15,27 +15,31 @@
  *    limitations under the License.
  */
 
-package com.luke.uikit.bitmappool;
+package com.luke.uikit.bitmap.pool;
 
-import android.graphics.Bitmap;
+import java.util.Queue;
 
 /**
  * Created by amitshekhar on 17/06/16.
  */
-public interface BitmapPool {
+abstract class BaseKeyPool<T extends Pooling> {
+    private static final int MAX_SIZE = 20;
+    private final Queue<T> keyPool = Util.createQueue(MAX_SIZE);
 
-    int getMaxSize();
+    protected T get() {
+        T result = keyPool.poll();
+        if (result == null) {
+            result = create();
+        }
+        return result;
+    }
 
-    void setSizeMultiplier(float sizeMultiplier);
+    public void offer(T key) {
+        if (keyPool.size() < MAX_SIZE) {
+            keyPool.offer(key);
+        }
+    }
 
-    void put(Bitmap bitmap);
-
-    Bitmap get(int width, int height, Bitmap.Config config);
-
-    Bitmap getDirty(int width, int height, Bitmap.Config config);
-
-    void clearMemory();
-
-    void trimMemory(int level);
+    protected abstract T create();
 }
 

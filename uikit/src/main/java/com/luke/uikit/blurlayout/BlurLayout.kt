@@ -21,7 +21,6 @@ import androidx.annotation.WorkerThread
 import androidx.core.os.HandlerCompat
 import com.luke.uikit.R
 import com.luke.uikit.internal.BitmapCache
-import com.luke.uikit.internal.CachingBitmap
 import com.luke.uikit.stack.StackRootView
 import kotlin.math.max
 import kotlin.math.min
@@ -80,11 +79,10 @@ class BlurLayout @JvmOverloads constructor(
     ) : Runnable {
 
         override fun run() {
-            val item = BitmapCache[scaledWidth, scaledHeight]
-            val bitmap = item.bitmap
+            val item = BitmapCache.pool[scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888]
             // 在后台慢慢用软件画图来画，防止主线程卡住
             // 因为软件绘制实在是太慢了
-            backgroundCanvas.setBitmap(bitmap)
+            backgroundCanvas.setBitmap(item)
             backgroundCanvas.save()
             // 放大画布来绘制
             backgroundCanvas.scale(1f / blurSampling, 1f / blurSampling)
@@ -93,15 +91,15 @@ class BlurLayout @JvmOverloads constructor(
                     backgroundCanvas.drawPicture(recorder)
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    BitmapCache.put(item)
+                    BitmapCache.pool.put(item)
                     return
                 } finally {
                     backgroundCanvas.restore()
                     backgroundCanvas.setBitmap(null)
                 }
             }
-            processBitmap(bitmap)
-            bitmap.prepareToDraw()
+            processBitmap(item)
+            item.prepareToDraw()
             post {
                 clearBackground()
                 background = item
@@ -142,7 +140,7 @@ class BlurLayout @JvmOverloads constructor(
     private val rs = RenderScript.create(context)
     private val blur = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
 
-    private var background: CachingBitmap? = null
+    private var background: Bitmap? = null
         set(value) {
             field = value
             invalidate()
@@ -172,27 +170,9 @@ class BlurLayout @JvmOverloads constructor(
     private fun clearBackground() {
         val old = background
         if (old != null) {
-            BitmapCache.put(old)
+            BitmapCache.pool.put(old)
         }
         background = null
-    }
-
-    private fun checkStackTop(v: View): Boolean {
-        var c2: View = v
-        var p2: ViewGroup? = v.parent as? ViewGroup
-        while (p2 != null && p2 !is StackRootView) {
-            c2 = p2
-            p2 = p2.parent as? ViewGroup
-        }
-        return if (p2 is StackRootView) {
-            if (p2.stack.isNotEmpty()) {
-                p2.stack.last().view == c2
-            } else {
-                true
-            }
-        } else {
-            true
-        }
     }
 
     private fun checkDraw(): Boolean {
@@ -201,7 +181,7 @@ class BlurLayout @JvmOverloads constructor(
         }
 
         if (!isDirty) {
-            return checkStackTop(this)
+            return StackRootView.checkStackTop(this)
         }
         var c: View? = this
         var p: ViewGroup? = this.parent as? ViewGroup
@@ -209,7 +189,7 @@ class BlurLayout @JvmOverloads constructor(
             for (index in 0 until p.childCount) {
                 val v = p.getChildAt(index)
                 if (v != c && v.isDirty) {
-                    return checkStackTop(p)
+                    return StackRootView.checkStackTop(p)
                 }
             }
             c = p
@@ -261,7 +241,7 @@ class BlurLayout @JvmOverloads constructor(
         return true
     }
 
-    private fun doDraw(canvas: Canvas, item: CachingBitmap) {
+    private fun doDraw(canvas: Canvas, item: Bitmap) {
         if (cornerRadius > 0) {
             canvas.save()
             // 经过渲染的Bitmap由于缩放的关系
@@ -285,7 +265,7 @@ class BlurLayout @JvmOverloads constructor(
                     reset()
                     isFilterBitmap = true
                     isAntiAlias = true
-                    shader = item.shader
+                    shader = BitmapCache.getShader(item)
                 }
             )
             canvas.drawRoundRect(
@@ -308,7 +288,7 @@ class BlurLayout @JvmOverloads constructor(
             canvas.restore()
         } else {
             canvas.drawBitmap(
-                item.bitmap,
+                item,
                 null,
                 drawingRect.apply {
                     set(

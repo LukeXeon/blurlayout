@@ -1,12 +1,10 @@
-package com.luke.uikit.internal
+package com.luke.uikit.utils
 
 import android.app.Activity
 import android.app.Application
-import android.content.ComponentCallbacks2
-import android.content.res.Configuration
 import android.os.Bundle
 
-internal abstract class Plugin : Application.ActivityLifecycleCallbacks, ComponentCallbacks2 {
+open class ActivityLifecycleCallbacksAdapter : Application.ActivityLifecycleCallbacks {
     override fun onActivityPaused(activity: Activity) {
 
     }
@@ -32,18 +30,6 @@ internal abstract class Plugin : Application.ActivityLifecycleCallbacks, Compone
     }
 
     override fun onActivityResumed(activity: Activity) {
-
-    }
-
-    override fun onLowMemory() {
-
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-
-    }
-
-    override fun onTrimMemory(level: Int) {
 
     }
 }

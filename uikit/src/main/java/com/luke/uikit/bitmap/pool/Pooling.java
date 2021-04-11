@@ -15,31 +15,12 @@
  *    limitations under the License.
  */
 
-package com.luke.uikit.bitmappool;
-
-import java.util.Queue;
+package com.luke.uikit.bitmap.pool;
 
 /**
  * Created by amitshekhar on 17/06/16.
  */
-abstract class BaseKeyPool<T extends Pooling> {
-    private static final int MAX_SIZE = 20;
-    private final Queue<T> keyPool = Util.createQueue(MAX_SIZE);
-
-    protected T get() {
-        T result = keyPool.poll();
-        if (result == null) {
-            result = create();
-        }
-        return result;
-    }
-
-    public void offer(T key) {
-        if (keyPool.size() < MAX_SIZE) {
-            keyPool.offer(key);
-        }
-    }
-
-    protected abstract T create();
+interface Pooling {
+    void offer();
 }
 
