@@ -18,7 +18,7 @@ import androidx.core.content.res.ResourcesCompat
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetBehavior.BottomSheetCallback
 import com.luke.uikit.R
-import com.luke.uikit.internal.StackRootViews
+import com.luke.uikit.startup.StackRootViews
 import java.util.*
 
 class StackRootView(

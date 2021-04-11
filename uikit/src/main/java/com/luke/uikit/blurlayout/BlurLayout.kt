@@ -20,7 +20,7 @@ import androidx.annotation.Px
 import androidx.annotation.WorkerThread
 import androidx.core.os.HandlerCompat
 import com.luke.uikit.R
-import com.luke.uikit.internal.BitmapCache
+import com.luke.uikit.startup.BitmapCache
 import com.luke.uikit.stack.StackRootView
 import kotlin.math.max
 import kotlin.math.min

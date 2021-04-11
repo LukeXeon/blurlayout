@@ -1,4 +1,4 @@
-package com.luke.uikit.internal
+package com.luke.uikit.startup
 
 import android.app.Activity
 import android.app.Application
