@@ -9,7 +9,7 @@ import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
 import androidx.startup.Initializer
 import com.luke.uikit.stack.StackRootView
-import com.luke.uikit.utils.ActivityLifecycleCallbacksAdapter
+import com.luke.uikit.utils.ActivityLifecycleObserver
 import java.util.*
 
 @Keep
@@ -25,7 +25,7 @@ internal class StackRootViews : Initializer<Unit> {
     }
 
 
-    companion object : ActivityLifecycleCallbacksAdapter() {
+    companion object : ActivityLifecycleObserver() {
 
         override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
             val rootView = activity.window.decorView as ViewGroup

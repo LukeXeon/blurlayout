@@ -181,7 +181,7 @@ class BlurLayout @JvmOverloads constructor(
         }
 
         if (!isDirty) {
-            return StackRootView.checkStackTop(this)
+            return StackRootView.checkTop(this)
         }
         var c: View? = this
         var p: ViewGroup? = this.parent as? ViewGroup
@@ -189,7 +189,7 @@ class BlurLayout @JvmOverloads constructor(
             for (index in 0 until p.childCount) {
                 val v = p.getChildAt(index)
                 if (v != c && v.isDirty) {
-                    return StackRootView.checkStackTop(p)
+                    return StackRootView.checkTop(p)
                 }
             }
             c = p

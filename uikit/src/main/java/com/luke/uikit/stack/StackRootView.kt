@@ -217,7 +217,7 @@ class StackRootView(
             StackRootViews[activity]?.pop()
         }
 
-        internal fun checkStackTop(v: View): Boolean {
+        internal fun checkTop(v: View): Boolean {
             var c2: View = v
             var p2: ViewGroup? = v.parent as? ViewGroup
             while (p2 != null && p2 !is StackRootView) {
