@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.drawable.ColorDrawable
+import android.os.Parcelable
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
@@ -15,6 +16,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.OnBackPressedDispatcher
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import androidx.core.content.res.ResourcesCompat
+import androidx.fragment.app.FragmentActivity
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetBehavior.BottomSheetCallback
 import com.luke.uikit.R
@@ -24,7 +26,7 @@ import java.util.*
 class StackRootView(
     context: Context
 ) : CoordinatorLayout(context) {
-
+    private val dispatcher: OnBackPressedDispatcher?
     private val stack = ArrayList<StackItem>()
     private val path = Path()
     private val pathRectF = RectF()
@@ -32,9 +34,9 @@ class StackRootView(
     private val topHeight: Float
     private var hasTransitionRunning: Boolean = false
 
-    var dispatcher: OnBackPressedDispatcher? = null
-
     init {
+        val activity = (context as? FragmentActivity)
+        dispatcher = activity?.onBackPressedDispatcher
         background = ColorDrawable(Color.BLACK)
         val typedValue = TypedValue()
         context.theme.resolveAttribute(R.attr.actionBarSize, typedValue, true)
@@ -45,6 +47,11 @@ class StackRootView(
 
     fun push(view: View, layoutParams: FrameLayout.LayoutParams?) {
         PushTransition(view, layoutParams).run()
+    }
+
+    override fun onRestoreInstanceState(state: Parcelable?) {
+        super.onRestoreInstanceState(state)
+        removeAllViews()
     }
 
     private fun pop() {
@@ -73,9 +80,9 @@ class StackRootView(
             wrapper.isClickable = true
             val params = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
             val behavior = BottomSheetBehavior<FrameLayout>()
-            val dispatcher = dispatcher
             val item = StackItem(
-                wrapper, if (dispatcher != null) {
+                wrapper,
+                if (dispatcher != null)
                     object : OnBackPressedCallback(true) {
                         override fun handleOnBackPressed() {
                             pop()
@@ -83,7 +90,8 @@ class StackRootView(
                     }.apply {
                         dispatcher.addCallback(this)
                     }
-                } else null
+                else
+                    null
             )
             params.behavior = behavior
             behavior.skipCollapsed = true
