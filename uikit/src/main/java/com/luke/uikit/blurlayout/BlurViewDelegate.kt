@@ -377,7 +377,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
 
         private val bitmapPool: LruBitmapPool
 
-        private val shaders = ArrayList<SoftReference<BitmapShader>>()
+        private val shaders = LinkedList<SoftReference<BitmapShader>>()
 
         private val getBitmap: (BitmapShader) -> Bitmap by lazy {
             val field = BitmapShader::class.java.getDeclaredField("mBitmap").apply {
@@ -430,7 +430,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
 
         private fun obtainShader(bitmap: Bitmap): BitmapShader {
             synchronized(shaders) {
-                val snapshot = ArrayList(shaders)
+                val snapshot = LinkedList(shaders)
                 for (ref in snapshot) {
                     val shader = ref.get()
                     if (shader == null) {
