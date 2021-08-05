@@ -24,7 +24,6 @@ import java.lang.ref.SoftReference
 import java.util.*
 import java.util.concurrent.FutureTask
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.collections.ArrayList
 import kotlin.math.max
 import kotlin.math.min
 
