@@ -214,11 +214,11 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
                         surface.lockCanvas(null)
                     }
                     // 转换canvas来到View的绝对位置
+                    canvas.scale(1f / blurSampling, 1f / blurSampling)
                     canvas.translate(
                         -tempVisibleRect.left.toFloat(),
                         -tempVisibleRect.top.toFloat()
                     )
-                    canvas.scale(1f / blurSampling, 1f / blurSampling)
                     // 防止画到自己
                     try {
                         background.skipDrawing = true
