@@ -7,6 +7,7 @@ import android.renderscript.Allocation
 import android.renderscript.Element
 import android.renderscript.RenderScript
 import android.renderscript.ScriptIntrinsicBlur
+import android.util.Log
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
@@ -46,7 +47,7 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
         if (width * height > 0) {
             if (recorder == null || recorder.width != width && recorder.height != height) {
                 imageReader?.close()
-                val r = ImageReader.newInstance(width, height, ImageFormat.JPEG, 60)
+                val r = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 60)
                 r.setOnImageAvailableListener(this, handler)
                 imageReader = r
             }
@@ -82,34 +83,17 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
         tempOptions.inMutable = true
     }
 
-    private class ByteBufferInputStream(private val buf: ByteBuffer) : InputStream() {
-        override fun read(): Int {
-            return if (!buf.hasRemaining()) {
-                -1
-            } else buf.get().toInt() and 0xFF
-        }
-
-        override fun read(bytes: ByteArray, off: Int, len: Int): Int {
-            var l = len
-            if (!buf.hasRemaining()) {
-                return -1
-            }
-            l = min(l, buf.remaining())
-            buf[bytes, off, l]
-            return l
-        }
-    }
-
     override fun onViewAttachedToWindow(v: View) {
         v.viewTreeObserver.addOnPreDrawListener(this)
         val p = v as ViewGroup
         val application = v.context.applicationContext
         val layout = object : ViewGroup(application) {
 
-            override fun dispatchDraw(canvas: Canvas?) {
+            override fun drawChild(canvas: Canvas?, child: View?, drawingTime: Long): Boolean {
                 if (canvas != recordingCanvas) {
-                    super.dispatchDraw(canvas)
+                    return super.drawChild(canvas, child, drawingTime)
                 }
+                return false
             }
 
             override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
@@ -120,6 +104,7 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
                 return Int.MIN_VALUE
             }
         }
+        layout.setWillNotDraw(false)
         val view = TextureView(application)
         layout.addView(view)
         p.addView(
@@ -190,7 +175,7 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
                     )
                 )
             }
-            if (rootView != null && recorder != null && checkDirty(view)) {
+            if (rootView != null && recorder != null && checkDirty(layout)) {
                 view.getGlobalVisibleRect(tempVisibleRect)
                 val width = tempVisibleRect.width()
                 val height = tempVisibleRect.height()
@@ -226,21 +211,27 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
     }
 
     override fun onImageAvailable(reader: ImageReader) {
+        val backgroundView = this.backgroundView ?: return
+        val image = reader.acquireLatestImage() ?: return
         val blurRadius = this.blurRadius
         val cornerRadius = this.cornerRadius
         val blurSampling = this.blurSampling
         val width = reader.width
         val height = reader.height
-        val backgroundView = this.backgroundView ?: return
         tempDrawingRect.set(0, 0, width, height)
-        val image = reader.acquireLatestImage()
         val bitmap = image.use {
             val plane = image.planes[0]
             val bytes = plane.buffer
-            val decoder =
-                BitmapRegionDecoder.newInstance(ByteBufferInputStream(bytes), false)
-            AutoCloseable { decoder.recycle() }.use {
-                decoder.decodeRegion(tempDrawingRect, tempOptions)
+            val pixelStride = plane.pixelStride
+            val rowStride = plane.rowStride
+            val rowPadding = rowStride - pixelStride * width
+            Bitmap.createBitmap(
+                width + rowPadding / pixelStride,
+                height,
+                Bitmap.Config.ARGB_8888
+            ).apply {
+                copyPixelsFromBuffer(bytes)
+                reconfigure(width, height, Bitmap.Config.ARGB_8888)
             }
         }
         synchronized(processLock) {
@@ -308,6 +299,7 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
             }
             backgroundView.unlockCanvasAndPost(canvas)
         }
+        bitmap.recycle()
     }
 
     override fun onLayoutChange(
@@ -326,6 +318,8 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
     }
 
     companion object {
+
+        private const val TAG = "BlurViewDelegate"
 
         private fun checkDirty(view: View): Boolean {
             if (!view.isDirty) {
