@@ -20,7 +20,10 @@ import android.view.ViewTreeObserver
 import androidx.annotation.FloatRange
 import androidx.annotation.Px
 import com.luke.uikit.bitmap.pool.LruBitmapPool
+import java.lang.ref.SoftReference
+import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.collections.ArrayList
 import kotlin.math.max
 import kotlin.math.min
 
@@ -45,32 +48,7 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
         ViewGroup.LayoutParams.MATCH_PARENT,
         ViewGroup.LayoutParams.MATCH_PARENT
     )
-    private val updateBounds = Runnable {
-        val view = currentView ?: return@Runnable
-        val handler = handler ?: return@Runnable
-        val width = view.width
-        val height = view.height
-        val recorder = imageReader
-        val blurSampling = blurSampling
-        if (width * height > 0) {
-            if (recorder == null || recorder.width != width && recorder.height != height) {
-                val scaledWidth = (width / blurSampling).toInt()
-                val scaledHeight = (height / blurSampling).toInt()
-                imageReader?.close()
-                val r = ImageReader.newInstance(
-                    scaledWidth,
-                    scaledHeight,
-                    PixelFormat.RGBA_8888,
-                    60
-                )
-                r.setOnImageAvailableListener(this, handler)
-                imageReader = r
-            }
-        } else {
-            imageReader?.close()
-            imageReader = null
-        }
-    }
+    private val updateBounds = UpdateBoundsRunnable()
     private val tempOptions = BitmapFactory.Options()
     private val currentView: ViewGroup?
         get() = recorderLayout?.parent as? ViewGroup
@@ -96,6 +74,55 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
 
     init {
         tempOptions.inMutable = true
+    }
+
+    private inner class UpdateBoundsRunnable : Runnable {
+        override fun run() {
+            val view = currentView ?: return
+            val handler = handler ?: return
+            val width = view.width
+            val height = view.height
+            val recorder = imageReader
+            val blurSampling = blurSampling
+            if (width * height > 0) {
+                if (recorder == null || recorder.width != width && recorder.height != height) {
+                    val scaledWidth = (width / blurSampling).toInt()
+                    val scaledHeight = (height / blurSampling).toInt()
+                    imageReader?.close()
+                    val r = ImageReader.newInstance(
+                        scaledWidth,
+                        scaledHeight,
+                        PixelFormat.RGBA_8888,
+                        60
+                    )
+                    r.setOnImageAvailableListener(this@BlurViewDelegate, handler)
+                    imageReader = r
+                }
+            } else {
+                imageReader?.close()
+                imageReader = null
+            }
+        }
+    }
+
+    private object MemoryMonitor : ComponentCallbacks2 {
+
+        val isAttached = AtomicBoolean()
+
+        override fun onConfigurationChanged(newConfig: Configuration) {
+
+        }
+
+        override fun onLowMemory() {
+            synchronized(shaders) {
+                shaders.clear()
+            }
+            bitmapPool.clearMemory()
+        }
+
+        override fun onTrimMemory(level: Int) {
+            bitmapPool.trimMemory(level)
+        }
     }
 
     private class RecorderLayout(context: Context) : ViewGroup(context) {
@@ -127,20 +154,8 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
         v.viewTreeObserver.addOnPreDrawListener(this)
         val p = v as ViewGroup
         val application = v.context.applicationContext
-        if (isAttachCallback.compareAndSet(false, true)) {
-            application.unregisterComponentCallbacks(object : ComponentCallbacks2 {
-                override fun onConfigurationChanged(newConfig: Configuration) {
-
-                }
-
-                override fun onLowMemory() {
-                    bitmapPool.clearMemory()
-                }
-
-                override fun onTrimMemory(level: Int) {
-                    bitmapPool.trimMemory(level)
-                }
-            })
+        if (MemoryMonitor.isAttached.compareAndSet(false, true)) {
+            application.unregisterComponentCallbacks(MemoryMonitor)
         }
         val view = RecorderLayout(application)
         p.addView(
@@ -289,11 +304,7 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
                     canvas.height
                 )
                 if (cornerRadius > 0) {
-                    val backgroundShader = BitmapShader(
-                        bitmap,
-                        Shader.TileMode.MIRROR,
-                        Shader.TileMode.MIRROR
-                    )
+                    val backgroundShader = obtainShader(bitmap)
                     canvas.save()
                     // 经过渲染的Bitmap由于缩放的关系
                     // 可能会比View小，所以要做特殊处理，把它放大回去
@@ -362,7 +373,16 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
 
         private val bitmapPool: LruBitmapPool
 
-        private val isAttachCallback = AtomicBoolean()
+        private val shaders = ArrayList<SoftReference<BitmapShader>>()
+
+        private val getBitmap: (BitmapShader) -> Bitmap by lazy {
+            val field = BitmapShader::class.java.getDeclaredField("mBitmap").apply {
+                isAccessible = true
+            }
+            return@lazy {
+                field.get(it) as Bitmap
+            }
+        }
 
         init {
             val displayMetrics = Resources.getSystem().displayMetrics
@@ -387,6 +407,21 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
                 p = p.parent as? ViewGroup
             }
             return false
+        }
+
+        private fun obtainShader(bitmap: Bitmap): BitmapShader {
+            synchronized(shaders) {
+                val snapshot = ArrayList(shaders)
+                for (ref in snapshot) {
+                    val shader = ref.get()
+                    if (shader == null) {
+                        shaders.remove(ref)
+                    } else if (getBitmap(shader) == bitmap) {
+                        return shader
+                    }
+                }
+                return BitmapShader(bitmap, Shader.TileMode.MIRROR, Shader.TileMode.MIRROR)
+            }
         }
 
         @JvmStatic
@@ -414,3 +449,6 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
         }
     }
 }
+
+
+
