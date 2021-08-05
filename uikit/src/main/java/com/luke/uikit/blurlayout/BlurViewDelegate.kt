@@ -369,7 +369,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                     PixelFormat.RGBA_8888,
                     60
                 )
-                r.setOnImageAvailableListener(this@BlurViewDelegate, handler)
+                r.setOnImageAvailableListener(this, handler)
                 imageReader = r
             }
         } else {
