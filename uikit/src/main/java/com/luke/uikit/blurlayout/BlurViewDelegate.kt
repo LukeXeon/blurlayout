@@ -40,6 +40,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
     private var blur: ScriptIntrinsicBlur? = null
     private var imageReader: ImageReader? = null
     private val processLock = Any()
+    private val drawingLock = Any()
     private val tempPaint = Paint()
     private val tempDrawingRectF = RectF()
     private val tempDrawingRect = Rect()
@@ -186,9 +187,11 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
         handler = null
         imageReader?.close()
         imageReader = null
-        val background = recorderLayout
-        if (background?.parent == v && v is ViewGroup) {
-            v.removeView(background)
+        synchronized(drawingLock) {
+            val background = recorderLayout
+            if (background?.parent == v && v is ViewGroup) {
+                v.removeView(background)
+            }
         }
         recorderLayout = null
         synchronized(processLock) {
@@ -253,7 +256,6 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
     }
 
     override fun onImageAvailable(reader: ImageReader) {
-        val backgroundView = this.recorderLayout ?: return
         val blurRadius = this.blurRadius
         val cornerRadius = this.cornerRadius
         val blurSampling = this.blurSampling
@@ -298,55 +300,58 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
             bitmap.prepareToDraw()
             val blurTime = SystemClock.uptimeMillis()
             Log.d(TAG, "blur=${blurTime - bitmapTime}")
-            val canvas = backgroundView.texture.lockCanvas()
-            if (canvas != null) {
-                tempDrawingRect.set(
-                    0,
-                    0,
-                    canvas.width,
-                    canvas.height
-                )
-                if (cornerRadius > 0) {
-                    val backgroundShader = obtainShader(bitmap)
-                    canvas.save()
-                    // 经过渲染的Bitmap由于缩放的关系
-                    // 可能会比View小，所以要做特殊处理，把它放大回去
-                    canvas.scale(
-                        blurSampling,
-                        blurSampling
+            synchronized(drawingLock) {
+                val backgroundView = this.recorderLayout ?: return
+                val canvas = backgroundView.texture.lockCanvas()
+                if (canvas != null) {
+                    tempDrawingRect.set(
+                        0,
+                        0,
+                        canvas.width,
+                        canvas.height
                     )
-                    canvas.drawRoundRect(
-                        tempDrawingRectF.apply {
-                            set(
-                                0f,
-                                0f,
-                                scaledWidth.toFloat(),
-                                scaledHeight.toFloat()
-                            )
-                        },
-                        cornerRadius / blurSampling,
-                        cornerRadius / blurSampling,
-                        tempPaint.apply {
-                            reset()
-                            isFilterBitmap = true
-                            isAntiAlias = true
-                            shader = backgroundShader
-                        }
-                    )
-                    canvas.restore()
-                } else {
-                    canvas.drawBitmap(
-                        bitmap,
-                        null,
-                        tempDrawingRect,
-                        tempPaint.apply {
-                            reset()
-                            isFilterBitmap = true
-                            isAntiAlias = true
-                        }
-                    )
+                    if (cornerRadius > 0) {
+                        val backgroundShader = obtainShader(bitmap)
+                        canvas.save()
+                        // 经过渲染的Bitmap由于缩放的关系
+                        // 可能会比View小，所以要做特殊处理，把它放大回去
+                        canvas.scale(
+                            blurSampling,
+                            blurSampling
+                        )
+                        canvas.drawRoundRect(
+                            tempDrawingRectF.apply {
+                                set(
+                                    0f,
+                                    0f,
+                                    scaledWidth.toFloat(),
+                                    scaledHeight.toFloat()
+                                )
+                            },
+                            cornerRadius / blurSampling,
+                            cornerRadius / blurSampling,
+                            tempPaint.apply {
+                                reset()
+                                isFilterBitmap = true
+                                isAntiAlias = true
+                                shader = backgroundShader
+                            }
+                        )
+                        canvas.restore()
+                    } else {
+                        canvas.drawBitmap(
+                            bitmap,
+                            null,
+                            tempDrawingRect,
+                            tempPaint.apply {
+                                reset()
+                                isFilterBitmap = true
+                                isAntiAlias = true
+                            }
+                        )
+                    }
+                    backgroundView.texture.unlockCanvasAndPost(canvas)
                 }
-                backgroundView.texture.unlockCanvasAndPost(canvas)
             }
             val drawTime = SystemClock.uptimeMillis()
             Log.d(TAG, "draw=${drawTime - blurTime}")
