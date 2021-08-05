@@ -1,18 +1,26 @@
 package com.luke.uikit.blurlayout
 
+import android.content.ComponentCallbacks2
+import android.content.Context
+import android.content.res.Configuration
+import android.content.res.Resources
 import android.graphics.*
+import android.media.Image
 import android.media.ImageReader
 import android.os.*
 import android.renderscript.Allocation
 import android.renderscript.Element
 import android.renderscript.RenderScript
 import android.renderscript.ScriptIntrinsicBlur
+import android.util.Log
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import androidx.annotation.FloatRange
 import androidx.annotation.Px
+import com.luke.uikit.bitmap.pool.LruBitmapPool
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 import kotlin.math.min
 
@@ -24,7 +32,7 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
     private var handler: Handler? = null
 
     @Volatile
-    private var backgroundView: TextureView? = null
+    private var recorderLayout: RecorderLayout? = null
     private var renderScript: RenderScript? = null
     private var blur: ScriptIntrinsicBlur? = null
     private var imageReader: ImageReader? = null
@@ -43,10 +51,18 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
         val width = view.width
         val height = view.height
         val recorder = imageReader
+        val blurSampling = blurSampling
         if (width * height > 0) {
             if (recorder == null || recorder.width != width && recorder.height != height) {
+                val scaledWidth = (width / blurSampling).toInt()
+                val scaledHeight = (height / blurSampling).toInt()
                 imageReader?.close()
-                val r = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 60)
+                val r = ImageReader.newInstance(
+                    scaledWidth,
+                    scaledHeight,
+                    PixelFormat.RGBA_8888,
+                    60
+                )
                 r.setOnImageAvailableListener(this, handler)
                 imageReader = r
             }
@@ -57,7 +73,7 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
     }
     private val tempOptions = BitmapFactory.Options()
     private val currentView: ViewGroup?
-        get() = backgroundView?.parent as? ViewGroup
+        get() = recorderLayout?.parent as? ViewGroup
 
     @Px
     @Volatile
@@ -82,26 +98,63 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
         tempOptions.inMutable = true
     }
 
+    private class RecorderLayout(context: Context) : ViewGroup(context) {
+        val texture = TextureView(context)
+        var skipDrawing: Boolean = false
+            set(value) {
+                field = value
+                invalidate()
+            }
+
+        init {
+            texture.isOpaque = false
+            addView(texture)
+        }
+
+        override fun dispatchDraw(canvas: Canvas?) {
+            if (!skipDrawing) {
+                super.dispatchDraw(canvas)
+            }
+        }
+
+        override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+            texture.layout(l, t, r, b)
+        }
+
+    }
+
     override fun onViewAttachedToWindow(v: View) {
         v.viewTreeObserver.addOnPreDrawListener(this)
         val p = v as ViewGroup
         val application = v.context.applicationContext
-        val view = TextureView(application)
+        if (isAttachCallback.compareAndSet(false, true)) {
+            application.unregisterComponentCallbacks(object : ComponentCallbacks2 {
+                override fun onConfigurationChanged(newConfig: Configuration) {
+
+                }
+
+                override fun onLowMemory() {
+                    bitmapPool.clearMemory()
+                }
+
+                override fun onTrimMemory(level: Int) {
+                    bitmapPool.trimMemory(level)
+                }
+            })
+        }
+        val view = RecorderLayout(application)
         p.addView(
             view,
-            ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
+            tempLayoutParams
         )
         val rs = RenderScript.create(application)
         val rsb = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
         val t = HandlerThread(
             toString(),
-            Process.THREAD_PRIORITY_FOREGROUND
+            Process.THREAD_PRIORITY_BACKGROUND
         ).apply { start() }
         val h = Handler(t.looper)
-        backgroundView = view
+        recorderLayout = view
         renderScript = rs
         blur = rsb
         thread = t
@@ -115,11 +168,11 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
         handler = null
         imageReader?.close()
         imageReader = null
-        val background = backgroundView
+        val background = recorderLayout
         if (background?.parent == v && v is ViewGroup) {
             v.removeView(background)
         }
-        backgroundView = null
+        recorderLayout = null
         synchronized(processLock) {
             blur?.destroy()
             blur = null
@@ -132,7 +185,7 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
         val view = currentView
         val rootView = currentView?.rootView
         val recorder = imageReader
-        val background = backgroundView
+        val background = recorderLayout
         if (view != null && background != null) {
             val index = view.indexOfChild(background)
             if (index == -1) {
@@ -147,14 +200,12 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
                     tempLayoutParams
                 )
             }
-            if (rootView != null && recorder != null && checkDirty(background)) {
+            if (rootView != null && recorder != null && checkDirty(view)) {
                 view.getGlobalVisibleRect(tempVisibleRect)
                 val width = tempVisibleRect.width()
                 val height = tempVisibleRect.height()
                 val blurSampling = blurSampling
-                val scaledWidth = (width / blurSampling).toInt()
-                val scaledHeight = (height / blurSampling).toInt()
-                if (scaledWidth * scaledHeight > 0) {
+                if (width * height > 0) {
                     // 不需要绘制整个屏幕，只需要绘制View底下那一层就可以了
                     val surface = recorder.surface
                     val canvas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -167,15 +218,13 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
                         -tempVisibleRect.left.toFloat(),
                         -tempVisibleRect.top.toFloat()
                     )
-                    // 设置recordingCanvas用来识别，防止画到自己
+                    canvas.scale(1f / blurSampling, 1f / blurSampling)
+                    // 防止画到自己
                     try {
-                        view.removeView(background)
+                        background.skipDrawing = true
                         rootView.draw(canvas)
                     } finally {
-                        view.addView(
-                            background, 0,
-                            tempLayoutParams
-                        )
+                        background.skipDrawing = false
                     }
                     // 结束录制
                     surface.unlockCanvasAndPost(canvas)
@@ -186,95 +235,103 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
     }
 
     override fun onImageAvailable(reader: ImageReader) {
-        val backgroundView = this.backgroundView ?: return
-        val image = reader.acquireLatestImage() ?: return
+        val backgroundView = this.recorderLayout ?: return
         val blurRadius = this.blurRadius
         val cornerRadius = this.cornerRadius
         val blurSampling = this.blurSampling
-        val width = reader.width
-        val height = reader.height
-        tempDrawingRect.set(0, 0, width, height)
-        val bitmap = image.use {
-            val plane = image.planes[0]
-            val bytes = plane.buffer
-            val pixelStride = plane.pixelStride
-            val rowStride = plane.rowStride
-            val rowPadding = rowStride - pixelStride * width
-            Bitmap.createBitmap(
-                width + rowPadding / pixelStride,
-                height,
-                Bitmap.Config.ARGB_8888
-            ).apply {
-                copyPixelsFromBuffer(bytes)
-                reconfigure(width, height, Bitmap.Config.ARGB_8888)
-            }
-        }
-        synchronized(processLock) {
-            val blur = this.blur ?: return
-            val input = Allocation.createFromBitmap(
-                renderScript, bitmap, Allocation.MipmapControl.MIPMAP_NONE,
-                Allocation.USAGE_SCRIPT
-            )
-            AutoCloseable { input.destroy() }.use {
-                val output = Allocation.createTyped(renderScript, input.type)
-                AutoCloseable { output.destroy() }.use {
-                    blur.setInput(input)
-                    blur.setRadius(blurRadius)
-                    blur.forEach(output)
-                    output.copyTo(bitmap)
+        val scaledWidth = reader.width
+        val scaledHeight = reader.height
+        var image: Image? = reader.acquireLatestImage()
+        while (image != null) {
+            val startTime = SystemClock.uptimeMillis()
+            val bitmap = image.use {
+                val plane = it.planes[0]
+                val bytes = plane.buffer
+                val pixelStride = plane.pixelStride
+                val rowStride = plane.rowStride
+                val rowPadding = rowStride - pixelStride * scaledWidth
+                bitmapPool.getDirty(
+                    scaledWidth + rowPadding / pixelStride,
+                    scaledHeight,
+                    Bitmap.Config.ARGB_8888
+                ).apply {
+                    copyPixelsFromBuffer(bytes)
+                    reconfigure(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888)
                 }
             }
-        }
-        bitmap.prepareToDraw()
-        val canvas = backgroundView.lockCanvas()
-        if (canvas != null) {
-            if (cornerRadius > 0) {
-                val backgroundShader = BitmapShader(
-                    bitmap,
-                    Shader.TileMode.MIRROR,
-                    Shader.TileMode.MIRROR
+            val bitmapTime = SystemClock.uptimeMillis()
+            Log.d(TAG, "bitmap=${bitmapTime - startTime}")
+            synchronized(processLock) {
+                val blur = this.blur ?: return
+                val input = Allocation.createFromBitmap(
+                    renderScript, bitmap, Allocation.MipmapControl.MIPMAP_NONE,
+                    Allocation.USAGE_SCRIPT
                 )
-                canvas.save()
-                // 经过渲染的Bitmap由于缩放的关系
-                // 可能会比View小，所以要做特殊处理，把它放大回去
-                canvas.scale(
-                    blurSampling,
-                    blurSampling
-                )
-                canvas.drawRoundRect(
-                    tempDrawingRectF.apply {
-                        set(
-                            0f,
-                            0f,
-                            width.toFloat() / blurSampling,
-                            height.toFloat() / blurSampling
-                        )
-                    },
-                    cornerRadius / blurSampling,
-                    cornerRadius / blurSampling,
-                    tempPaint.apply {
-                        reset()
-                        isFilterBitmap = true
-                        isAntiAlias = true
-                        shader = backgroundShader
+                AutoCloseable { input.destroy() }.use {
+                    val output = Allocation.createTyped(renderScript, input.type)
+                    AutoCloseable { output.destroy() }.use {
+                        blur.setInput(input)
+                        blur.setRadius(blurRadius)
+                        blur.forEach(output)
+                        output.copyTo(bitmap)
                     }
-                )
-                canvas.restore()
-            } else {
-                canvas.drawBitmap(
-                    bitmap,
-                    null,
-                    tempDrawingRect,
-                    tempPaint.apply {
-                        reset()
-                        isFilterBitmap = true
-                        isAntiAlias = true
-                    }
-                )
+                }
             }
-            backgroundView.unlockCanvasAndPost(canvas)
+            bitmap.prepareToDraw()
+            val blurTime = SystemClock.uptimeMillis()
+            Log.d(TAG, "blur=${blurTime - bitmapTime}")
+            val canvas = backgroundView.texture.lockCanvas()
+            if (canvas != null) {
+                tempDrawingRect.set(
+                    0,
+                    0,
+                    canvas.width,
+                    canvas.height
+                )
+                if (cornerRadius > 0) {
+                    val backgroundShader = BitmapShader(
+                        bitmap,
+                        Shader.TileMode.MIRROR,
+                        Shader.TileMode.MIRROR
+                    )
+                    canvas.save()
+                    // 经过渲染的Bitmap由于缩放的关系
+                    // 可能会比View小，所以要做特殊处理，把它放大回去
+                    canvas.scale(
+                        blurSampling,
+                        blurSampling
+                    )
+                    canvas.drawRoundRect(
+                        tempDrawingRectF.apply { set(tempDrawingRect) },
+                        cornerRadius / blurSampling,
+                        cornerRadius / blurSampling,
+                        tempPaint.apply {
+                            reset()
+                            isFilterBitmap = true
+                            isAntiAlias = true
+                            shader = backgroundShader
+                        }
+                    )
+                    canvas.restore()
+                } else {
+                    canvas.drawBitmap(
+                        bitmap,
+                        null,
+                        tempDrawingRect,
+                        tempPaint.apply {
+                            reset()
+                            isFilterBitmap = true
+                            isAntiAlias = true
+                        }
+                    )
+                }
+                backgroundView.texture.unlockCanvasAndPost(canvas)
+            }
+            val drawTime = SystemClock.uptimeMillis()
+            Log.d(TAG, "draw=${drawTime - blurTime}")
+            bitmapPool.put(bitmap)
+            image = reader.acquireLatestImage()
         }
-        bitmap.recycle()
     }
 
     override fun onLayoutChange(
@@ -295,6 +352,16 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
     companion object {
 
         private const val TAG = "BlurViewDelegate"
+
+        private val bitmapPool: LruBitmapPool
+
+        private val isAttachCallback = AtomicBoolean()
+
+        init {
+            val displayMetrics = Resources.getSystem().displayMetrics
+            val size = Int.SIZE_BYTES * displayMetrics.widthPixels * displayMetrics.heightPixels
+            bitmapPool = LruBitmapPool(size)
+        }
 
         private fun checkDirty(view: View): Boolean {
             if (!view.isDirty) {
