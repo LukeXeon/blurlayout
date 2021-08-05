@@ -27,7 +27,7 @@ import kotlin.collections.ArrayList
 import kotlin.math.max
 import kotlin.math.min
 
-class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
+class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListener,
     ImageReader.OnImageAvailableListener,
     View.OnAttachStateChangeListener,
     View.OnLayoutChangeListener {
