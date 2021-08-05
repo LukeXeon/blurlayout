@@ -430,11 +430,12 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
 
         private fun obtainShader(bitmap: Bitmap): BitmapShader {
             synchronized(shaders) {
-                val snapshot = LinkedList(shaders)
-                for (ref in snapshot) {
+                val it = shaders.iterator()
+                if (it.hasNext()) {
+                    val ref = it.next()
                     val shader = ref.get()
                     if (shader == null) {
-                        shaders.remove(ref)
+                        it.remove()
                     } else if (getBitmap(shader) == bitmap) {
                         return shader
                     }
