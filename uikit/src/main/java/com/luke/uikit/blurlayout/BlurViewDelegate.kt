@@ -7,15 +7,12 @@ import android.renderscript.Allocation
 import android.renderscript.Element
 import android.renderscript.RenderScript
 import android.renderscript.ScriptIntrinsicBlur
-import android.util.Log
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import androidx.annotation.FloatRange
 import androidx.annotation.Px
-import java.io.InputStream
-import java.nio.ByteBuffer
 import kotlin.math.max
 import kotlin.math.min
 
@@ -25,19 +22,21 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
     View.OnLayoutChangeListener {
     private var thread: HandlerThread? = null
     private var handler: Handler? = null
-    private var backgroundLayout: ViewGroup? = null
 
     @Volatile
     private var backgroundView: TextureView? = null
     private var renderScript: RenderScript? = null
     private var blur: ScriptIntrinsicBlur? = null
     private var imageReader: ImageReader? = null
-    private var recordingCanvas: Canvas? = null
     private val processLock = Any()
     private val tempPaint = Paint()
     private val tempDrawingRectF = RectF()
     private val tempDrawingRect = Rect()
     private val tempVisibleRect = Rect()
+    private val tempLayoutParams = ViewGroup.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.MATCH_PARENT
+    )
     private val updateBounds = Runnable {
         val view = currentView ?: return@Runnable
         val handler = handler ?: return@Runnable
@@ -58,7 +57,7 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
     }
     private val tempOptions = BitmapFactory.Options()
     private val currentView: ViewGroup?
-        get() = backgroundLayout?.parent as? ViewGroup
+        get() = backgroundView?.parent as? ViewGroup
 
     @Px
     @Volatile
@@ -87,28 +86,9 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
         v.viewTreeObserver.addOnPreDrawListener(this)
         val p = v as ViewGroup
         val application = v.context.applicationContext
-        val layout = object : ViewGroup(application) {
-
-            override fun drawChild(canvas: Canvas?, child: View?, drawingTime: Long): Boolean {
-                if (canvas != recordingCanvas) {
-                    return super.drawChild(canvas, child, drawingTime)
-                }
-                return false
-            }
-
-            override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-                getChildAt(0).layout(l, t, r, b)
-            }
-
-            override fun getChildDrawingOrder(childCount: Int, drawingPosition: Int): Int {
-                return Int.MIN_VALUE
-            }
-        }
-        layout.setWillNotDraw(false)
         val view = TextureView(application)
-        layout.addView(view)
         p.addView(
-            layout,
+            view,
             ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -121,7 +101,6 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
             Process.THREAD_PRIORITY_FOREGROUND
         ).apply { start() }
         val h = Handler(t.looper)
-        backgroundLayout = layout
         backgroundView = view
         renderScript = rs
         blur = rsb
@@ -136,11 +115,10 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
         handler = null
         imageReader?.close()
         imageReader = null
-        val layout = backgroundLayout
-        if (layout?.parent == v && v is ViewGroup) {
-            v.removeView(layout)
+        val background = backgroundView
+        if (background?.parent == v && v is ViewGroup) {
+            v.removeView(background)
         }
-        backgroundLayout = null
         backgroundView = null
         synchronized(processLock) {
             blur?.destroy()
@@ -154,28 +132,22 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
         val view = currentView
         val rootView = currentView?.rootView
         val recorder = imageReader
-        val layout = backgroundLayout
-        if (view != null && layout != null) {
-            val index = view.indexOfChild(layout)
+        val background = backgroundView
+        if (view != null && background != null) {
+            val index = view.indexOfChild(background)
             if (index == -1) {
                 view.addView(
-                    layout, 0,
-                    ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
+                    background, 0,
+                    tempLayoutParams
                 )
             } else if (index != 0) {
-                view.removeView(layout)
+                view.removeView(background)
                 view.addView(
-                    layout, 0,
-                    ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT
-                    )
+                    background, 0,
+                    tempLayoutParams
                 )
             }
-            if (rootView != null && recorder != null && checkDirty(layout)) {
+            if (rootView != null && recorder != null && checkDirty(background)) {
                 view.getGlobalVisibleRect(tempVisibleRect)
                 val width = tempVisibleRect.width()
                 val height = tempVisibleRect.height()
@@ -197,10 +169,13 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
                     )
                     // 设置recordingCanvas用来识别，防止画到自己
                     try {
-                        recordingCanvas = canvas
+                        view.removeView(background)
                         rootView.draw(canvas)
                     } finally {
-                        recordingCanvas = null
+                        view.addView(
+                            background, 0,
+                            tempLayoutParams
+                        )
                     }
                     // 结束录制
                     surface.unlockCanvasAndPost(canvas)
