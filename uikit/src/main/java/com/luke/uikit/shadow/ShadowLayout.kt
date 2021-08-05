@@ -56,9 +56,9 @@ class ShadowLayout @JvmOverloads constructor(
                 })
             }
         }
-        while (shadowCache.size > childCount) {
-            shadowCache.removeLast()
-        }
+//        while (shadowCache.size > childCount) {
+//            shadowCache.removeLast()
+//        }
         shadowCache.trimToSize()
         for (index in 0 until childCount) {
             val child = getChildAt(index)

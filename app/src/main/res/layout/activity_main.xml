@@ -1,47 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/white"
     tools:context=".MainActivity">
-
-    <FrameLayout
-        android:id="@+id/main_container"
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent">
-
-        <com.luke.uikit.wrap.WrapLayout
+        <FrameLayout
+            android:background="@color/colorAccent"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="100dp"
-            app:horizontalSpacing="5dp"
-            app:maxLines="3"
-            app:verticalSpacing="5dp">
-
-            <include layout="@layout/view_tag" />
-
-            <include layout="@layout/view_tag" />
-
-            <include layout="@layout/view_tag" />
-
-            <include layout="@layout/view_tag" />
-
-            <include layout="@layout/view_tag" />
-
-            <include layout="@layout/view_tag" />
-
-            <include layout="@layout/view_tag" />
-        </com.luke.uikit.wrap.WrapLayout>
-
-        <Button
-            android:id="@+id/open_pannel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:text="Open"
-            android:textColor="@android:color/black"
-            android:textSize="30dp"></Button>
-    </FrameLayout>
+            android:minHeight="10000dp"
+            android:layout_height="10000dp">
+            <ImageView
+                android:src="@drawable/ic_launcher_background"
+                android:layout_width="500dp"
+                android:layout_height="500dp"/>
+        </FrameLayout>
+    </ScrollView>
+    <com.luke.uikit.blurlayout.BlurLayout
+        android:layout_gravity="bottom"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+    </com.luke.uikit.blurlayout.BlurLayout>
 </FrameLayout>

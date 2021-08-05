@@ -1,48 +1,26 @@
 package com.luke.android.blurlayout.sample
 
+import android.animation.ObjectAnimator
+import android.app.Dialog
 import android.graphics.Color
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.Window
 import android.view.WindowManager
-import android.widget.Button
+import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
-import com.luke.uikit.popup.StackRootView
+import com.luke.uikit.stack.StackRootView
+import java.lang.reflect.Proxy
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var button: Button
+    private lateinit var button: View
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            val window: Window = window
-            window.clearFlags(
-                WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS
-                        or WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION
-            )
-            window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_LAYOUT_STABLE)
-            window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-            window.statusBarColor = Color.TRANSPARENT
-        }
         setContentView(R.layout.activity_main)
-        button = findViewById(R.id.open_pannel)
-        button.setOnClickListener(object : View.OnClickListener {
-            override fun onClick(v: View?) {
-                val l = this
-                StackRootView.push(
-                    this@MainActivity,
-                    layoutInflater.inflate(R.layout.activity_main, null, false).apply {
-                        findViewById<View>(R.id.open_pannel).setOnClickListener(l)
-                        background = ContextCompat.getDrawable(context,R.drawable.uikit_bottom_sheet_background)
-                    }
-                )
-            }
-        })
     }
-
-
 }
+
