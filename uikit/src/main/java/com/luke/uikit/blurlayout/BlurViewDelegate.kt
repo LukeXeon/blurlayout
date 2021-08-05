@@ -302,7 +302,14 @@ class BlurViewDelegate : ViewTreeObserver.OnPreDrawListener,
                         blurSampling
                     )
                     canvas.drawRoundRect(
-                        tempDrawingRectF.apply { set(tempDrawingRect) },
+                        tempDrawingRectF.apply {
+                            set(
+                                0f,
+                                0f,
+                                scaledWidth.toFloat(),
+                                scaledHeight.toFloat()
+                            )
+                        },
                         cornerRadius / blurSampling,
                         cornerRadius / blurSampling,
                         tempPaint.apply {
