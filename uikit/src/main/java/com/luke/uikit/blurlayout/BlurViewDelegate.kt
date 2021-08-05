@@ -166,7 +166,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
         val rsb = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
         val t = HandlerThread(
             toString(),
-            Process.THREAD_PRIORITY_BACKGROUND
+            Process.THREAD_PRIORITY_FOREGROUND
         ).apply { start() }
         val h = Handler(t.looper)
         recorderLayout = view
