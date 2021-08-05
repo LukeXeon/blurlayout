@@ -49,7 +49,10 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
         ViewGroup.LayoutParams.MATCH_PARENT,
         ViewGroup.LayoutParams.MATCH_PARENT
     )
-    private val updateBounds = UpdateBoundsHandler()
+    private val delayUpdateBounds = MessageQueue.IdleHandler {
+        updateBounds()
+        false
+    }
     private val tempOptions = BitmapFactory.Options()
     private val currentView: ViewGroup?
         get() = recorderLayout?.parent as? ViewGroup
@@ -75,38 +78,6 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
 
     init {
         tempOptions.inMutable = true
-    }
-
-    private inner class UpdateBoundsHandler : MessageQueue.IdleHandler {
-        override fun queueIdle(): Boolean {
-            val view = currentView
-            val handler = handler
-            if (view != null && handler != null) {
-                val width = view.width
-                val height = view.height
-                val recorder = imageReader
-                val blurSampling = blurSampling
-                if (width * height > 0) {
-                    if (recorder == null || recorder.width != width && recorder.height != height) {
-                        val scaledWidth = (width / blurSampling).toInt()
-                        val scaledHeight = (height / blurSampling).toInt()
-                        imageReader?.close()
-                        val r = ImageReader.newInstance(
-                            scaledWidth,
-                            scaledHeight,
-                            PixelFormat.RGBA_8888,
-                            60
-                        )
-                        r.setOnImageAvailableListener(this@BlurViewDelegate, handler)
-                        imageReader = r
-                    }
-                } else {
-                    imageReader?.close()
-                    imageReader = null
-                }
-            }
-            return false
-        }
     }
 
     private object MemoryMonitor : ComponentCallbacks2 {
@@ -371,8 +342,40 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
         oldRight: Int,
         oldBottom: Int
     ) {
-        mainQueue.removeIdleHandler(updateBounds)
-        mainQueue.addIdleHandler(updateBounds)
+        val recorder = imageReader
+        if (recorder != null) {
+            mainQueue.removeIdleHandler(delayUpdateBounds)
+            mainQueue.addIdleHandler(delayUpdateBounds)
+        } else {
+            updateBounds()
+        }
+    }
+
+    private fun updateBounds() {
+        val view = currentView ?: return
+        val handler = handler ?: return
+        val width = view.width
+        val height = view.height
+        val recorder = imageReader
+        val blurSampling = blurSampling
+        if (width * height > 0) {
+            if (recorder == null || recorder.width != width && recorder.height != height) {
+                val scaledWidth = (width / blurSampling).toInt()
+                val scaledHeight = (height / blurSampling).toInt()
+                imageReader?.close()
+                val r = ImageReader.newInstance(
+                    scaledWidth,
+                    scaledHeight,
+                    PixelFormat.RGBA_8888,
+                    60
+                )
+                r.setOnImageAvailableListener(this@BlurViewDelegate, handler)
+                imageReader = r
+            }
+        } else {
+            imageReader?.close()
+            imageReader = null
+        }
     }
 
     companion object {
