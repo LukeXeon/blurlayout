@@ -22,6 +22,7 @@ import androidx.annotation.Px
 import com.luke.uikit.bitmap.pool.LruBitmapPool
 import java.lang.ref.SoftReference
 import java.util.*
+import java.util.concurrent.FutureTask
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.collections.ArrayList
 import kotlin.math.max
@@ -48,7 +49,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
         ViewGroup.LayoutParams.MATCH_PARENT,
         ViewGroup.LayoutParams.MATCH_PARENT
     )
-    private val updateBounds = UpdateBoundsRunnable()
+    private val updateBounds = UpdateBoundsHandler()
     private val tempOptions = BitmapFactory.Options()
     private val currentView: ViewGroup?
         get() = recorderLayout?.parent as? ViewGroup
@@ -76,32 +77,35 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
         tempOptions.inMutable = true
     }
 
-    private inner class UpdateBoundsRunnable : Runnable {
-        override fun run() {
-            val view = currentView ?: return
-            val handler = handler ?: return
-            val width = view.width
-            val height = view.height
-            val recorder = imageReader
-            val blurSampling = blurSampling
-            if (width * height > 0) {
-                if (recorder == null || recorder.width != width && recorder.height != height) {
-                    val scaledWidth = (width / blurSampling).toInt()
-                    val scaledHeight = (height / blurSampling).toInt()
+    private inner class UpdateBoundsHandler : MessageQueue.IdleHandler {
+        override fun queueIdle(): Boolean {
+            val view = currentView
+            val handler = handler
+            if (view != null && handler != null) {
+                val width = view.width
+                val height = view.height
+                val recorder = imageReader
+                val blurSampling = blurSampling
+                if (width * height > 0) {
+                    if (recorder == null || recorder.width != width && recorder.height != height) {
+                        val scaledWidth = (width / blurSampling).toInt()
+                        val scaledHeight = (height / blurSampling).toInt()
+                        imageReader?.close()
+                        val r = ImageReader.newInstance(
+                            scaledWidth,
+                            scaledHeight,
+                            PixelFormat.RGBA_8888,
+                            60
+                        )
+                        r.setOnImageAvailableListener(this@BlurViewDelegate, handler)
+                        imageReader = r
+                    }
+                } else {
                     imageReader?.close()
-                    val r = ImageReader.newInstance(
-                        scaledWidth,
-                        scaledHeight,
-                        PixelFormat.RGBA_8888,
-                        60
-                    )
-                    r.setOnImageAvailableListener(this@BlurViewDelegate, handler)
-                    imageReader = r
+                    imageReader = null
                 }
-            } else {
-                imageReader?.close()
-                imageReader = null
             }
+            return false
         }
     }
 
@@ -363,8 +367,8 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
         oldRight: Int,
         oldBottom: Int
     ) {
-        v.removeCallbacks(updateBounds)
-        v.postDelayed(updateBounds, 200)
+        mainQueue.removeIdleHandler(updateBounds)
+        mainQueue.addIdleHandler(updateBounds)
     }
 
     companion object {
@@ -381,6 +385,21 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
             }
             return@lazy {
                 field.get(it) as Bitmap
+            }
+        }
+
+        private val mainQueue by lazy {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                Looper.getMainLooper().queue
+            } else {
+                val mainLooper = Looper.getMainLooper()
+                if (Looper.myLooper() == mainLooper) {
+                    Looper.myQueue()
+                } else {
+                    val task = FutureTask { Looper.myQueue() }
+                    Handler(mainLooper).postAtFrontOfQueue(task)
+                    task.get()
+                }
             }
         }
 
