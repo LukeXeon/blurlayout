@@ -24,7 +24,6 @@ import androidx.annotation.WorkerThread
 import com.luke.uikit.bitmap.pool.LruBitmapPool
 import java.lang.ref.SoftReference
 import java.util.*
-import java.util.concurrent.FutureTask
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 import kotlin.math.min
@@ -53,10 +52,6 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
         ViewGroup.LayoutParams.MATCH_PARENT,
         ViewGroup.LayoutParams.MATCH_PARENT
     )
-    private val delayUpdateBounds = MessageQueue.IdleHandler {
-        updateBounds()
-        false
-    }
     private val tempOptions = BitmapFactory.Options()
     private val currentView: ViewGroup?
         get() = recorderLayout?.parent as? ViewGroup
@@ -118,9 +113,12 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                 invalidate()
             }
 
+        @Volatile
+        var isPause: Boolean = false
+
         @WorkerThread
         fun lockCanvas(): Canvas? {
-            return texture.lockCanvas()
+            return if (isPause) null else texture.lockCanvas()
         }
 
         @WorkerThread
@@ -259,7 +257,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                 val pixelStride = plane.pixelStride
                 val rowStride = plane.rowStride
                 val rowPadding = rowStride - pixelStride * scaledWidth
-                bitmapPool.getDirty(
+                bitmapPool.get(
                     scaledWidth + rowPadding / pixelStride,
                     scaledHeight,
                     Bitmap.Config.ARGB_8888
@@ -298,7 +296,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                         canvas.height
                     )
                     if (cornerRadius > 0) {
-                        val clipBitmap = bitmapPool.getDirty(
+                        val clipBitmap = bitmapPool.get(
                             scaledWidth,
                             scaledHeight,
                             Bitmap.Config.ARGB_8888
@@ -357,8 +355,9 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
         }
     }
 
+    @SuppressLint("WrongConstant")
     override fun onLayoutChange(
-        v: View,
+        view: View,
         left: Int,
         top: Int,
         right: Int,
@@ -368,18 +367,6 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
         oldRight: Int,
         oldBottom: Int
     ) {
-        val recorder = imageReader
-        if (recorder != null) {
-            mainQueue.removeIdleHandler(delayUpdateBounds)
-            mainQueue.addIdleHandler(delayUpdateBounds)
-        } else {
-            updateBounds()
-        }
-    }
-
-    @SuppressLint("WrongConstant")
-    private fun updateBounds() {
-        val view = currentView ?: return
         val handler = worker ?: return
         val width = view.width
         val height = view.height
@@ -419,21 +406,6 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
             }
             return@lazy {
                 field.get(it) as Bitmap
-            }
-        }
-
-        private val mainQueue by lazy {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                Looper.getMainLooper().queue
-            } else {
-                val mainLooper = Looper.getMainLooper()
-                if (Looper.myLooper() == mainLooper) {
-                    Looper.myQueue()
-                } else {
-                    val task = FutureTask { Looper.myQueue() }
-                    Handler(mainLooper).postAtFrontOfQueue(task)
-                    task.get()
-                }
             }
         }
 
