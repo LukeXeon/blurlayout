@@ -20,9 +20,9 @@ import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import androidx.annotation.FloatRange
 import androidx.annotation.Px
+import androidx.annotation.WorkerThread
 import com.luke.uikit.bitmap.pool.LruBitmapPool
 import java.lang.ref.SoftReference
-import java.lang.ref.WeakReference
 import java.util.*
 import java.util.concurrent.FutureTask
 import java.util.concurrent.atomic.AtomicBoolean
@@ -33,8 +33,8 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
     ImageReader.OnImageAvailableListener,
     View.OnAttachStateChangeListener,
     View.OnLayoutChangeListener {
-    private var thread: HandlerThread? = null
-    private var handler: Handler? = null
+    private var workerThread: HandlerThread? = null
+    private var worker: Handler? = null
 
     @Volatile
     private var recorderLayout: RecorderLayout? = null
@@ -45,7 +45,9 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
     private val drawingLock = Any()
     private val tempPaint = Paint()
     private val tempDrawingRectF = RectF()
-    private val tempDrawingRect = Rect()
+    private val tempCanvas = Canvas()
+    private val tempSrcRect = Rect()
+    private val tempDestRect = Rect()
     private val tempVisibleRect = Rect()
     private val tempLayoutParams = ViewGroup.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -55,7 +57,6 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
         updateBounds()
         false
     }
-    private val updateBoundsLambda: () -> Unit = this::updateBounds
     private val tempOptions = BitmapFactory.Options()
     private val currentView: ViewGroup?
         get() = recorderLayout?.parent as? ViewGroup
@@ -87,25 +88,13 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
 
         private val isAttached = AtomicBoolean()
 
-        private val callbacks = Collections.newSetFromMap(
-            WeakHashMap<() -> Unit, Boolean>()
-        )
-
-        fun attach(context: Context, callback: () -> Unit) {
+        fun attach(context: Context) {
             if (isAttached.compareAndSet(false, true)) {
                 context.registerComponentCallbacks(this)
-            }
-            synchronized(callbacks) {
-                callbacks.add(callback)
             }
         }
 
         override fun onConfigurationChanged(newConfig: Configuration) {
-            synchronized(callbacks) {
-                for (callback in callbacks) {
-                    callback()
-                }
-            }
         }
 
         override fun onLowMemory() {
@@ -121,12 +110,23 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
     }
 
     private class RecorderLayout(context: Context) : ViewGroup(context) {
-        val texture = TextureView(context)
+        private val texture = TextureView(context)
+        lateinit var worker: Handler
         var skipDrawing: Boolean = false
             set(value) {
                 field = value
                 invalidate()
             }
+
+        @WorkerThread
+        fun lockCanvas(): Canvas? {
+            return texture.lockCanvas()
+        }
+
+        @WorkerThread
+        fun unlockCanvasAndPost(canvas: Canvas) {
+            return texture.unlockCanvasAndPost(canvas)
+        }
 
         init {
             texture.isOpaque = false
@@ -142,14 +142,13 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
         override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
             texture.layout(l, t, r, b)
         }
-
     }
 
     override fun onViewAttachedToWindow(v: View) {
         v.viewTreeObserver.addOnPreDrawListener(this)
         val p = v as ViewGroup
         val application = v.context.applicationContext
-        AppMonitor.attach(application, updateBoundsLambda)
+        AppMonitor.attach(application)
         val view = RecorderLayout(application)
         p.addView(
             view,
@@ -162,18 +161,19 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
             Process.THREAD_PRIORITY_FOREGROUND
         ).apply { start() }
         val h = Handler(t.looper)
+        view.worker = h
         recorderLayout = view
         renderScript = rs
         blur = rsb
-        thread = t
-        handler = h
+        workerThread = t
+        worker = h
     }
 
     override fun onViewDetachedFromWindow(v: View) {
         v.viewTreeObserver.removeOnPreDrawListener(this)
-        thread?.quit()
-        thread = null
-        handler = null
+        workerThread?.quitSafely()
+        workerThread = null
+        worker = null
         imageReader?.close()
         imageReader = null
         synchronized(drawingLock) {
@@ -265,7 +265,6 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                     Bitmap.Config.ARGB_8888
                 ).apply {
                     copyPixelsFromBuffer(bytes)
-                    reconfigure(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888)
                 }
             }
             val bitmapTime = SystemClock.uptimeMillis()
@@ -286,21 +285,37 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                     }
                 }
             }
-            bitmap.prepareToDraw()
             val blurTime = SystemClock.uptimeMillis()
             Log.d(TAG, "blur=${blurTime - bitmapTime}")
             synchronized(drawingLock) {
                 val backgroundView = this.recorderLayout ?: return
-                val canvas = backgroundView.texture.lockCanvas()
+                val canvas = backgroundView.lockCanvas()
                 if (canvas != null) {
-                    tempDrawingRect.set(
+                    tempDestRect.set(
                         0,
                         0,
                         canvas.width,
                         canvas.height
                     )
                     if (cornerRadius > 0) {
-                        val backgroundShader = obtainShader(bitmap)
+                        val clipBitmap = bitmapPool.getDirty(
+                            scaledWidth,
+                            scaledHeight,
+                            Bitmap.Config.ARGB_8888
+                        )
+                        tempCanvas.setBitmap(clipBitmap)
+                        tempCanvas.drawBitmap(
+                            bitmap,
+                            tempSrcRect.apply {
+                                set(0, 0, scaledWidth, scaledHeight)
+                            },
+                            tempSrcRect,
+                            null
+                        )
+                        tempCanvas.setBitmap(null)
+                        clipBitmap.prepareToDraw()
+                        bitmapPool.put(bitmap)
+                        val backgroundShader = obtainShader(clipBitmap)
                         canvas.save()
                         // 经过渲染的Bitmap由于缩放的关系
                         // 可能会比View小，所以要做特殊处理，把它放大回去
@@ -310,12 +325,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                         )
                         canvas.drawRoundRect(
                             tempDrawingRectF.apply {
-                                set(
-                                    0f,
-                                    0f,
-                                    scaledWidth.toFloat(),
-                                    scaledHeight.toFloat()
-                                )
+                                set(tempSrcRect)
                             },
                             cornerRadius / blurSampling,
                             cornerRadius / blurSampling,
@@ -325,20 +335,24 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                             }
                         )
                         canvas.restore()
+                        bitmapPool.put(clipBitmap)
                     } else {
+                        bitmap.prepareToDraw()
                         canvas.drawBitmap(
                             bitmap,
-                            null,
-                            tempDrawingRect,
+                            tempSrcRect.apply {
+                                set(0, 0, scaledWidth, scaledHeight)
+                            },
+                            tempDestRect,
                             tempPaint.apply { reset() }
                         )
+                        bitmapPool.put(bitmap)
                     }
-                    backgroundView.texture.unlockCanvasAndPost(canvas)
+                    backgroundView.unlockCanvasAndPost(canvas)
                 }
             }
             val drawTime = SystemClock.uptimeMillis()
             Log.d(TAG, "draw=${drawTime - blurTime}")
-            bitmapPool.put(bitmap)
             image = reader.acquireLatestImage()
         }
     }
@@ -366,7 +380,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
     @SuppressLint("WrongConstant")
     private fun updateBounds() {
         val view = currentView ?: return
-        val handler = handler ?: return
+        val handler = worker ?: return
         val width = view.width
         val height = view.height
         val recorder = imageReader
