@@ -1,18 +1,10 @@
 package com.luke.android.blurlayout.sample
 
-import android.animation.ObjectAnimator
-import android.app.Dialog
-import android.graphics.Color
-import android.graphics.drawable.Drawable
-import android.os.Build
+import android.app.Activity
+import android.app.Application
 import android.os.Bundle
 import android.view.View
-import android.view.Window
-import android.view.WindowManager
-import androidx.annotation.Keep
 import androidx.appcompat.app.AppCompatActivity
-import com.luke.uikit.stack.StackRootView
-import java.lang.reflect.Proxy
 
 class MainActivity : AppCompatActivity() {
 
@@ -25,6 +17,37 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+
     }
+}
+
+private class A : Application.ActivityLifecycleCallbacks {
+    override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+
+    }
+
+    override fun onActivityStarted(activity: Activity) {
+    }
+
+    override fun onActivityResumed(activity: Activity) {
+
+    }
+
+    override fun onActivityPaused(activity: Activity) {
+
+    }
+
+    override fun onActivityStopped(activity: Activity) {
+
+    }
+
+    override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {
+
+    }
+
+    override fun onActivityDestroyed(activity: Activity) {
+
+    }
+
 }
 

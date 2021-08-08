@@ -14,10 +14,7 @@ import android.renderscript.Element
 import android.renderscript.RenderScript
 import android.renderscript.ScriptIntrinsicBlur
 import android.util.Log
-import android.view.TextureView
-import android.view.View
-import android.view.ViewGroup
-import android.view.ViewTreeObserver
+import android.view.*
 import androidx.annotation.FloatRange
 import androidx.annotation.Px
 import androidx.annotation.WorkerThread
@@ -113,12 +110,9 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                 invalidate()
             }
 
-        @Volatile
-        var isPause: Boolean = false
-
         @WorkerThread
         fun lockCanvas(): Canvas? {
-            return if (isPause) null else texture.lockCanvas()
+            return texture.lockCanvas()
         }
 
         @WorkerThread
@@ -446,7 +440,9 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                         return shader
                     }
                 }
-                return BitmapShader(bitmap, Shader.TileMode.MIRROR, Shader.TileMode.MIRROR)
+                val shader = BitmapShader(bitmap, Shader.TileMode.MIRROR, Shader.TileMode.MIRROR)
+                shaderCaches.addFirst(SoftReference(shader))
+                return shader
             }
         }
 
