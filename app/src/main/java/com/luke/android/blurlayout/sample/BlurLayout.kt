@@ -35,15 +35,6 @@ class BlurLayout @JvmOverloads constructor(
 
 
     init {
-        if (attrs != null) {
-            val a = context.obtainStyledAttributes(
-                attrs, R.styleable.BlurLayout, defStyleAttr, 0
-            )
-            cornerRadius = a.getDimensionPixelSize(R.styleable.BlurLayout_uikit_cornerRadius, 0)
-            blurSampling = a.getFloat(R.styleable.BlurLayout_uikit_blurSampling, 4f)
-            blurRadius = a.getFloat(R.styleable.BlurLayout_uikit_blurRadius, 10f)
-            a.recycle()
-        }
     }
 
 
