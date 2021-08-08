@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <item name="uikit_radius" type="dimen">15dp</item>
-    <item name="uikit_stack_layout_x_rate" type="dimen">0.1f</item>
-    <item name="uikit_stack_layout_y_rate" type="dimen">0.05f</item>
-    <item name="uikit_stack_layout_scale_rate" type="dimen">0.1f</item>
-    <item name="uikit_stack_layout_alpha_rate" type="dimen">0.5f</item>
-</resources>

@@ -1,9 +1,8 @@
-package com.luke.uikit.blurlayout
+package com.luke.blurlayout
 
 import android.content.Context
 import android.util.AttributeSet
 import android.widget.FrameLayout
-import com.luke.uikit.R
 
 
 class BlurLayout @JvmOverloads constructor(
@@ -12,7 +11,7 @@ class BlurLayout @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
-    private val delegate = BlurViewDelegate.attach(this)
+    private val delegate = BlurViewDelegate(this, attrs, defStyleAttr)
 
     var cornerRadius: Int
         get() = delegate.cornerRadius
@@ -31,18 +30,4 @@ class BlurLayout @JvmOverloads constructor(
         set(value) {
             delegate.blurRadius = value
         }
-
-
-    init {
-        if (attrs != null) {
-            val a = context.obtainStyledAttributes(
-                attrs, R.styleable.BlurLayout, defStyleAttr, 0
-            )
-            cornerRadius = a.getDimensionPixelSize(R.styleable.BlurLayout_uikit_cornerRadius, 0)
-            blurSampling = a.getFloat(R.styleable.BlurLayout_uikit_blurSampling, 4f)
-            blurRadius = a.getFloat(R.styleable.BlurLayout_uikit_blurRadius, 10f)
-            a.recycle()
-        }
-
-    }
 }

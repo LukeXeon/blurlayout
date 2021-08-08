@@ -20,10 +20,9 @@
                 android:layout_height="500dp"/>
         </FrameLayout>
     </ScrollView>
-    <com.luke.uikit.blurlayout.BlurLayout
-        app:uikit_cornerRadius="20dp"
+    <com.luke.blurlayout.BlurLayout
         android:layout_gravity="bottom"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
-    </com.luke.uikit.blurlayout.BlurLayout>
+    </com.luke.blurlayout.BlurLayout>
 </FrameLayout>

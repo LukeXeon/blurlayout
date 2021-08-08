@@ -1,14 +1,10 @@
 package com.luke.android.blurlayout.sample
 
 import android.content.Context
-import android.graphics.*
 import android.util.AttributeSet
 import android.widget.FrameLayout
 import androidx.annotation.FloatRange
 import androidx.annotation.Px
-import com.luke.uikit.R
-import java.io.InputStream
-import java.nio.ByteBuffer
 import kotlin.math.max
 import kotlin.math.min
 

@@ -1,10 +1,8 @@
-package com.luke.uikit.blurlayout
+package com.luke.blurlayout
 
 import android.annotation.SuppressLint
-import android.content.ComponentCallbacks2
+import android.app.Application
 import android.content.Context
-import android.content.res.Configuration
-import android.content.res.Resources
 import android.graphics.*
 import android.media.Image
 import android.media.ImageReader
@@ -13,19 +11,28 @@ import android.renderscript.Allocation
 import android.renderscript.Element
 import android.renderscript.RenderScript
 import android.renderscript.ScriptIntrinsicBlur
+import android.util.AttributeSet
 import android.util.Log
 import android.view.*
+import android.widget.FrameLayout
 import androidx.annotation.FloatRange
 import androidx.annotation.Px
 import androidx.annotation.WorkerThread
-import com.luke.uikit.bitmap.pool.LruBitmapPool
-import java.lang.ref.SoftReference
+import com.bumptech.glide.Glide
+import java.lang.ref.WeakReference
+import java.lang.reflect.Field
 import java.util.*
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.reflect.KProperty
 
-class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListener,
+class BlurViewDelegate
+@JvmOverloads
+constructor(
+    attachView: FrameLayout,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0
+) : ViewTreeObserver.OnPreDrawListener,
     ImageReader.OnImageAvailableListener,
     View.OnAttachStateChangeListener,
     View.OnLayoutChangeListener {
@@ -33,7 +40,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
     private var worker: Handler? = null
 
     @Volatile
-    private var recorderLayout: RecorderLayout? = null
+    private var background: BackgroundLayout? = null
     private var renderScript: RenderScript? = null
     private var blur: ScriptIntrinsicBlur? = null
     private var imageReader: ImageReader? = null
@@ -51,59 +58,82 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
     )
     private val tempOptions = BitmapFactory.Options()
     private val currentView: ViewGroup?
-        get() = recorderLayout?.parent as? ViewGroup
+        get() = background?.parent as? FrameLayout
 
     @Px
     @Volatile
     var cornerRadius: Int = 0
         set(value) {
             field = max(0, value)
+            background?.invalidate()
         }
 
     @Volatile
     var blurSampling: Float = 4f
         set(value) {
             field = max(1f, value)
+            background?.invalidate()
         }
 
     @Volatile
     var blurRadius: Float = 10f
         set(@FloatRange(from = 0.0, to = 25.0) value) {
             field = max(25f, min(0f, value))
+            background?.invalidate()
         }
+
+    init {
+        attachView.addOnAttachStateChangeListener(this)
+        attachView.addOnLayoutChangeListener(this)
+        if (attachView.isAttachedToWindow) {
+            this.onViewAttachedToWindow(attachView)
+        }
+        if (attachView.isLaidOut) {
+            this.onLayoutChange(
+                attachView,
+                attachView.left,
+                attachView.top,
+                attachView.right,
+                attachView.bottom,
+                attachView.left,
+                attachView.top,
+                attachView.right,
+                attachView.bottom
+            )
+        }
+        if (attrs != null) {
+            val a = attachView.context.obtainStyledAttributes(
+                attrs, R.styleable.BlurView, defStyleAttr, 0
+            )
+            cornerRadius = a.getDimensionPixelSize(R.styleable.BlurView_cornerRadius, 0)
+            blurSampling = a.getFloat(R.styleable.BlurView_blurSampling, 4f)
+            blurRadius = a.getFloat(R.styleable.BlurView_blurRadius, 10f)
+            a.recycle()
+        }
+    }
 
     init {
         tempOptions.inMutable = true
     }
 
-    private object AppMonitor : ComponentCallbacks2 {
+    private interface BitmapPool {
+        operator fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap
 
-        private val isAttached = AtomicBoolean()
+        fun recycle(bitmap: Bitmap)
+    }
 
-        fun attach(context: Context) {
-            if (isAttached.compareAndSet(false, true)) {
-                context.registerComponentCallbacks(this)
-            }
+    private class NonBitmapPool : BitmapPool {
+        override fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap {
+            return Bitmap.createBitmap(width, height, config)
         }
 
-        override fun onConfigurationChanged(newConfig: Configuration) {
-        }
-
-        override fun onLowMemory() {
-            synchronized(shaderCaches) {
-                shaderCaches.clear()
-            }
-            bitmapPool.clearMemory()
-        }
-
-        override fun onTrimMemory(level: Int) {
-            bitmapPool.trimMemory(level)
+        override fun recycle(bitmap: Bitmap) {
+            bitmap.recycle()
         }
     }
 
-    private class RecorderLayout(context: Context) : ViewGroup(context) {
+    private class BackgroundLayout(context: Context) : ViewGroup(context) {
         private val texture = TextureView(context)
-        lateinit var worker: Handler
         var skipDrawing: Boolean = false
             set(value) {
                 field = value
@@ -122,7 +152,14 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
 
         init {
             texture.isOpaque = false
-            addView(texture)
+            attachViewToParent(
+                texture,
+                0,
+                LayoutParams(
+                    LayoutParams.MATCH_PARENT,
+                    LayoutParams.MATCH_PARENT
+                )
+            )
         }
 
         override fun dispatchDraw(canvas: Canvas?) {
@@ -134,14 +171,18 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
         override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
             texture.layout(l, t, r, b)
         }
+
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            texture.measure(widthMeasureSpec, heightMeasureSpec)
+            setMeasuredDimension(texture.measuredWidth, texture.measuredHeight)
+        }
     }
 
     override fun onViewAttachedToWindow(v: View) {
         v.viewTreeObserver.addOnPreDrawListener(this)
         val p = v as ViewGroup
         val application = v.context.applicationContext
-        AppMonitor.attach(application)
-        val view = RecorderLayout(application)
+        val view = BackgroundLayout(application)
         p.addView(
             view,
             tempLayoutParams
@@ -153,8 +194,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
             Process.THREAD_PRIORITY_FOREGROUND
         ).apply { start() }
         val h = Handler(t.looper)
-        view.worker = h
-        recorderLayout = view
+        background = view
         renderScript = rs
         blur = rsb
         workerThread = t
@@ -169,12 +209,12 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
         imageReader?.close()
         imageReader = null
         synchronized(drawingLock) {
-            val background = recorderLayout
+            val background = background
             if (background?.parent == v && v is ViewGroup) {
                 v.removeView(background)
             }
         }
-        recorderLayout = null
+        background = null
         synchronized(processLock) {
             blur?.destroy()
             blur = null
@@ -184,10 +224,11 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
     }
 
     override fun onPreDraw(): Boolean {
+        val start = SystemClock.uptimeMillis()
         val view = currentView
         val rootView = currentView?.rootView
         val recorder = imageReader
-        val background = recorderLayout
+        val background = background
         if (view != null && background != null) {
             val index = view.indexOfChild(background)
             if (index == -1) {
@@ -233,6 +274,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                 }
             }
         }
+        Log.d(TAG, "snapshot=" + (SystemClock.uptimeMillis() - start))
         return true
     }
 
@@ -251,13 +293,10 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                 val pixelStride = plane.pixelStride
                 val rowStride = plane.rowStride
                 val rowPadding = rowStride - pixelStride * scaledWidth
-                bitmapPool.get(
-                    scaledWidth + rowPadding / pixelStride,
-                    scaledHeight,
-                    Bitmap.Config.ARGB_8888
-                ).apply {
-                    copyPixelsFromBuffer(bytes)
-                }
+                val bitmap =
+                    bitmapPool[scaledWidth + rowPadding / pixelStride, scaledHeight, Bitmap.Config.ARGB_8888]
+                bitmap.copyPixelsFromBuffer(bytes)
+                return@use bitmap
             }
             val bitmapTime = SystemClock.uptimeMillis()
             Log.d(TAG, "bitmap=${bitmapTime - startTime}")
@@ -280,7 +319,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
             val blurTime = SystemClock.uptimeMillis()
             Log.d(TAG, "blur=${blurTime - bitmapTime}")
             synchronized(drawingLock) {
-                val backgroundView = this.recorderLayout ?: return
+                val backgroundView = this.background ?: return
                 val canvas = backgroundView.lockCanvas()
                 if (canvas != null) {
                     tempDestRect.set(
@@ -290,11 +329,8 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                         canvas.height
                     )
                     if (cornerRadius > 0) {
-                        val clipBitmap = bitmapPool.get(
-                            scaledWidth,
-                            scaledHeight,
-                            Bitmap.Config.ARGB_8888
-                        )
+                        val clipBitmap =
+                            bitmapPool[scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888]
                         tempCanvas.setBitmap(clipBitmap)
                         tempCanvas.drawBitmap(
                             bitmap,
@@ -306,8 +342,8 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                         )
                         tempCanvas.setBitmap(null)
                         clipBitmap.prepareToDraw()
-                        bitmapPool.put(bitmap)
-                        val backgroundShader = obtainShader(clipBitmap)
+                        bitmapPool.recycle(bitmap)
+                        val backgroundShader = loadShaderCache(clipBitmap)
                         canvas.save()
                         // 经过渲染的Bitmap由于缩放的关系
                         // 可能会比View小，所以要做特殊处理，把它放大回去
@@ -327,7 +363,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                             }
                         )
                         canvas.restore()
-                        bitmapPool.put(clipBitmap)
+                        bitmapPool.recycle(clipBitmap)
                     } else {
                         bitmap.prepareToDraw()
                         canvas.drawBitmap(
@@ -338,7 +374,7 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                             tempDestRect,
                             tempPaint.apply { reset() }
                         )
-                        bitmapPool.put(bitmap)
+                        bitmapPool.recycle(bitmap)
                     }
                     backgroundView.unlockCanvasAndPost(canvas)
                 }
@@ -390,23 +426,44 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
 
         private const val TAG = "BlurViewDelegate"
 
-        private val bitmapPool: LruBitmapPool
+        private val bitmapPool by lazy {
+            try {
+                @SuppressLint("PrivateApi")
+                val activityThreadClass = Class.forName("android.app.ActivityThread")
+                val field = activityThreadClass.getDeclaredField("mInitialApplication").apply {
+                    isAccessible = true
+                }
+                val context = field.get(null) as Application
+                val innerPool = Glide.get(context).bitmapPool
+                return@lazy object : BitmapPool {
+                    override fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap {
+                        return innerPool.get(width, height, config)
+                    }
 
-        private val shaderCaches = LinkedList<SoftReference<BitmapShader>>()
-
-        private val getBitmap by lazy<(BitmapShader) -> Bitmap> {
-            val field = BitmapShader::class.java.getDeclaredField("mBitmap").apply {
-                isAccessible = true
-            }
-            return@lazy {
-                field.get(it) as Bitmap
+                    override fun recycle(bitmap: Bitmap) {
+                        innerPool.put(bitmap)
+                    }
+                }
+            } catch (e: Throwable) {
+                return@lazy NonBitmapPool()
             }
         }
 
-        init {
-            val displayMetrics = Resources.getSystem().displayMetrics
-            val size = Int.SIZE_BYTES * displayMetrics.widthPixels * displayMetrics.heightPixels
-            bitmapPool = LruBitmapPool(size)
+        private val shaderCaches by lazy { LinkedList<WeakReference<BitmapShader>>() }
+
+        private val BitmapShader.bitmap: Bitmap by object : Any(), () -> Field {
+
+            override fun invoke(): Field {
+                return BitmapShader::class.java.getDeclaredField("mBitmap").apply {
+                    isAccessible = true
+                }
+            }
+
+            private val field by lazy(this)
+
+            operator fun getValue(shader: BitmapShader, property: KProperty<*>): Bitmap {
+                return field.get(shader) as Bitmap
+            }
         }
 
         private fun checkDirty(view: View): Boolean {
@@ -428,7 +485,10 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
             return false
         }
 
-        private fun obtainShader(bitmap: Bitmap): BitmapShader {
+        private fun loadShaderCache(bitmap: Bitmap): BitmapShader {
+            if (bitmapPool is NonBitmapPool) {
+                return BitmapShader(bitmap, Shader.TileMode.MIRROR, Shader.TileMode.MIRROR)
+            }
             synchronized(shaderCaches) {
                 val it = shaderCaches.iterator()
                 while (it.hasNext()) {
@@ -436,41 +496,18 @@ class BlurViewDelegate private constructor() : ViewTreeObserver.OnPreDrawListene
                     val shader = ref.get()
                     if (shader == null) {
                         it.remove()
-                    } else if (getBitmap(shader) == bitmap) {
+                    } else if (shader.bitmap == bitmap) {
                         return shader
                     }
                 }
+                Log.d(
+                    TAG, "create shader for bitmap=$bitmap," +
+                            "current cache size=" + shaderCaches.size
+                )
                 val shader = BitmapShader(bitmap, Shader.TileMode.MIRROR, Shader.TileMode.MIRROR)
-                shaderCaches.addFirst(SoftReference(shader))
+                shaderCaches.addFirst(WeakReference(shader))
                 return shader
             }
         }
-
-        @JvmStatic
-        fun attach(view: View): BlurViewDelegate {
-            val delegate = BlurViewDelegate()
-            view.addOnAttachStateChangeListener(delegate)
-            view.addOnLayoutChangeListener(delegate)
-            if (view.isAttachedToWindow) {
-                delegate.onViewAttachedToWindow(view)
-            }
-            if (view.isLaidOut) {
-                delegate.onLayoutChange(
-                    view,
-                    view.left,
-                    view.top,
-                    view.right,
-                    view.bottom,
-                    view.left,
-                    view.top,
-                    view.right,
-                    view.bottom
-                )
-            }
-            return delegate
-        }
     }
 }
-
-
-

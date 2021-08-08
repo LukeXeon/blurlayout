@@ -1,26 +1,7 @@
 <resources>
-    <attr name="uikit_cornerRadius" format="dimension" />
-    <attr name="uikit_title" format="string" />
-    <declare-styleable name="HeaderLayout">
-        <attr name="uikit_title" />
-    </declare-styleable>
-    <declare-styleable name="BlurLayout">
-        <attr name="uikit_cornerRadius" />
-        <attr name="uikit_blurSampling" format="float" />
-        <attr name="uikit_blurRadius" format="float" />
-        <attr name="uikit_maskColor" format="color" />
-    </declare-styleable>
-    <declare-styleable name="WrapLayout">
-        <attr name="uikit_maxLines" format="integer" />
-        <attr name="uikit_horizontalSpacing" format="dimension" />
-        <attr name="uikit_verticalSpacing" format="dimension" />
-    </declare-styleable>
-    <declare-styleable name="ShadowLayout_Layout">
-        <attr name="uikit_shadowElevation" format="dimension" />
-        <attr name="uikit_cornerRadius" />
-        <attr name="uikit_shadowColor" format="color" />
-    </declare-styleable>
-    <declare-styleable name="LinkedSlideBehavior_Layout">
-        <attr name="uikit_layout_slide_handler" format="reference" />
+    <declare-styleable name="BlurView">
+        <attr name="cornerRadius" format="dimension" />
+        <attr name="blurSampling" format="float" />
+        <attr name="blurRadius" format="float" />
     </declare-styleable>
 </resources>
