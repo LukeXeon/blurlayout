@@ -83,6 +83,7 @@ constructor(
         }
 
     init {
+        tempOptions.inMutable = true
         attachView.addOnAttachStateChangeListener(this)
         attachView.addOnLayoutChangeListener(this)
         if (attachView.isAttachedToWindow) {
@@ -112,9 +113,6 @@ constructor(
         }
     }
 
-    init {
-        tempOptions.inMutable = true
-    }
 
     private interface BitmapPool {
         operator fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap
@@ -293,8 +291,11 @@ constructor(
                 val pixelStride = plane.pixelStride
                 val rowStride = plane.rowStride
                 val rowPadding = rowStride - pixelStride * scaledWidth
-                val bitmap =
-                    bitmapPool[scaledWidth + rowPadding / pixelStride, scaledHeight, Bitmap.Config.ARGB_8888]
+                val bitmap = bitmapPool[
+                        scaledWidth + rowPadding / pixelStride,
+                        scaledHeight,
+                        Bitmap.Config.ARGB_8888
+                ]
                 bitmap.copyPixelsFromBuffer(bytes)
                 return@use bitmap
             }
@@ -329,8 +330,11 @@ constructor(
                         canvas.height
                     )
                     if (cornerRadius > 0) {
-                        val clipBitmap =
-                            bitmapPool[scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888]
+                        val clipBitmap = bitmapPool[
+                                scaledWidth,
+                                scaledHeight,
+                                Bitmap.Config.RGB_565
+                        ]
                         tempCanvas.setBitmap(clipBitmap)
                         tempCanvas.drawBitmap(
                             bitmap,
@@ -430,10 +434,18 @@ constructor(
             try {
                 @SuppressLint("PrivateApi")
                 val activityThreadClass = Class.forName("android.app.ActivityThread")
-                val field = activityThreadClass.getDeclaredField("mInitialApplication").apply {
-                    isAccessible = true
-                }
-                val context = field.get(null) as Application
+                val sCurrentActivityThreadField = activityThreadClass
+                    .getDeclaredField("sCurrentActivityThread")
+                    .apply {
+                        isAccessible = true
+                    }
+                val sCurrentActivityThread = sCurrentActivityThreadField.get(null)
+                val mInitialApplicationField = activityThreadClass
+                    .getDeclaredField("mInitialApplication")
+                    .apply {
+                        isAccessible = true
+                    }
+                val context = mInitialApplicationField.get(sCurrentActivityThread) as Application
                 val innerPool = Glide.get(context).bitmapPool
                 return@lazy object : BitmapPool {
                     override fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap {
@@ -445,6 +457,7 @@ constructor(
                     }
                 }
             } catch (e: Throwable) {
+                e.printStackTrace()
                 return@lazy NonBitmapPool()
             }
         }
