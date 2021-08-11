@@ -19,6 +19,7 @@ import androidx.annotation.FloatRange
 import androidx.annotation.Px
 import androidx.annotation.WorkerThread
 import com.bumptech.glide.Glide
+import java.lang.RuntimeException
 import java.lang.ref.WeakReference
 import java.lang.reflect.Field
 import java.util.*
@@ -316,7 +317,7 @@ constructor(
         val blurSampling = this.blurSampling
         val scaledWidth = reader.width
         val scaledHeight = reader.height
-        var image: Image? = reader.acquireLatestImage()
+        var image: Image? = reader.acquireLatestImageCompat()
         while (image != null) {
             val startTime = SystemClock.uptimeMillis()
             val bitmap = image.use {
@@ -416,7 +417,7 @@ constructor(
             }
             val drawTime = SystemClock.uptimeMillis()
             Log.d(TAG, "draw=${drawTime - blurTime}")
-            image = reader.acquireLatestImage()
+            image = reader.acquireLatestImageCompat()
         }
     }
 
@@ -446,7 +447,7 @@ constructor(
                     scaledWidth,
                     scaledHeight,
                     PixelFormat.RGBA_8888,
-                    60
+                    30
                 )
                 r.setOnImageAvailableListener(this, handler)
                 imageReader = r
@@ -508,6 +509,24 @@ constructor(
             operator fun getValue(shader: BitmapShader, property: KProperty<*>): Bitmap {
                 return field.get(shader) as Bitmap
             }
+        }
+
+        private fun ImageReader.acquireLatestImageCompat(): Image? {
+            try {
+                return this.acquireLatestImage()
+            } catch (e: RuntimeException) {
+                /* In API level 23 or below,  it will throw "java.lang.RuntimeException:
+           ImageReaderContext is not initialized" when ImageReader is closed. To make the
+           behavior consistent as newer API levels,  we make it return null Image instead.*/
+                if (!isImageReaderContextNotInitializedException(e)) {
+                    throw e // only catch RuntimeException:ImageReaderContext is not initialized
+                }
+            }
+            return null
+        }
+
+        private fun isImageReaderContextNotInitializedException(e: RuntimeException): Boolean {
+            return "ImageReaderContext is not initialized" == e.message
         }
 
         private fun checkDirty(view: View): Boolean {
