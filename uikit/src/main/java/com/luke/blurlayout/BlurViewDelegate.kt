@@ -345,7 +345,6 @@ constructor(
                             null
                         )
                         tempCanvas.setBitmap(null)
-                        clipBitmap.prepareToDraw()
                         bitmapPool.recycle(bitmap)
                         val backgroundShader = loadShaderCache(clipBitmap)
                         canvas.save()
@@ -369,7 +368,6 @@ constructor(
                         canvas.restore()
                         bitmapPool.recycle(clipBitmap)
                     } else {
-                        bitmap.prepareToDraw()
                         canvas.drawBitmap(
                             bitmap,
                             tempSrcRect.apply {
