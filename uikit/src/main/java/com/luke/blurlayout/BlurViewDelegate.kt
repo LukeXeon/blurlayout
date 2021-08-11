@@ -56,7 +56,7 @@ constructor(
         ViewGroup.LayoutParams.MATCH_PARENT
     )
     private val tempOptions = BitmapFactory.Options()
-    private val currentView: ViewGroup?
+    private val currentView: FrameLayout?
         get() = background?.parent as? FrameLayout
 
     @Px
