@@ -45,7 +45,6 @@ constructor(
     private var blur: ScriptIntrinsicBlur? = null
     private var imageReader: ImageReader? = null
     private val processLock = Any()
-    private val drawingLock = Any()
     private val tempPaint = Paint()
     private val tempDrawingRectF = RectF()
     private val tempCanvas = Canvas()
@@ -206,13 +205,11 @@ constructor(
         worker = null
         imageReader?.close()
         imageReader = null
-        synchronized(drawingLock) {
-            val background = background
-            if (background?.parent == v && v is ViewGroup) {
-                v.removeView(background)
-            }
+        val background = this.background
+        if (background?.parent == v && v is ViewGroup) {
+            v.removeView(background)
         }
-        background = null
+        this.background = null
         synchronized(processLock) {
             blur?.destroy()
             blur = null
@@ -319,67 +316,65 @@ constructor(
             }
             val blurTime = SystemClock.uptimeMillis()
             Log.d(TAG, "blur=${blurTime - bitmapTime}")
-            synchronized(drawingLock) {
-                val backgroundView = this.background ?: return
-                val canvas = backgroundView.lockCanvas()
-                if (canvas != null) {
-                    tempDestRect.set(
-                        0,
-                        0,
-                        canvas.width,
-                        canvas.height
+            val backgroundView = this.background ?: return
+            val canvas = backgroundView.lockCanvas()
+            if (canvas != null) {
+                tempDestRect.set(
+                    0,
+                    0,
+                    canvas.width,
+                    canvas.height
+                )
+                if (cornerRadius > 0) {
+                    val clipBitmap = bitmapPool[
+                            scaledWidth,
+                            scaledHeight,
+                            Bitmap.Config.RGB_565
+                    ]
+                    tempCanvas.setBitmap(clipBitmap)
+                    tempCanvas.drawBitmap(
+                        bitmap,
+                        tempSrcRect.apply {
+                            set(0, 0, scaledWidth, scaledHeight)
+                        },
+                        tempSrcRect,
+                        null
                     )
-                    if (cornerRadius > 0) {
-                        val clipBitmap = bitmapPool[
-                                scaledWidth,
-                                scaledHeight,
-                                Bitmap.Config.RGB_565
-                        ]
-                        tempCanvas.setBitmap(clipBitmap)
-                        tempCanvas.drawBitmap(
-                            bitmap,
-                            tempSrcRect.apply {
-                                set(0, 0, scaledWidth, scaledHeight)
-                            },
-                            tempSrcRect,
-                            null
-                        )
-                        tempCanvas.setBitmap(null)
-                        bitmapPool.recycle(bitmap)
-                        val backgroundShader = loadShaderCache(clipBitmap)
-                        canvas.save()
-                        // 经过渲染的Bitmap由于缩放的关系
-                        // 可能会比View小，所以要做特殊处理，把它放大回去
-                        canvas.scale(
-                            blurSampling,
-                            blurSampling
-                        )
-                        canvas.drawRoundRect(
-                            tempDrawingRectF.apply {
-                                set(tempSrcRect)
-                            },
-                            cornerRadius / blurSampling,
-                            cornerRadius / blurSampling,
-                            tempPaint.apply {
-                                reset()
-                                shader = backgroundShader
-                            }
-                        )
-                        canvas.restore()
-                        bitmapPool.recycle(clipBitmap)
-                    } else {
-                        canvas.drawBitmap(
-                            bitmap,
-                            tempSrcRect.apply {
-                                set(0, 0, scaledWidth, scaledHeight)
-                            },
-                            tempDestRect,
-                            tempPaint.apply { reset() }
-                        )
-                        bitmapPool.recycle(bitmap)
-                    }
-                    backgroundView.unlockCanvasAndPost(canvas)
+                    tempCanvas.setBitmap(null)
+                    bitmapPool.recycle(bitmap)
+                    val backgroundShader = loadShaderCache(clipBitmap)
+                    canvas.save()
+                    // 经过渲染的Bitmap由于缩放的关系
+                    // 可能会比View小，所以要做特殊处理，把它放大回去
+                    canvas.scale(
+                        blurSampling,
+                        blurSampling
+                    )
+                    canvas.drawRoundRect(
+                        tempDrawingRectF.apply {
+                            set(tempSrcRect)
+                        },
+                        cornerRadius / blurSampling,
+                        cornerRadius / blurSampling,
+                        tempPaint.apply {
+                            reset()
+                            shader = backgroundShader
+                        }
+                    )
+                    canvas.restore()
+                    bitmapPool.recycle(clipBitmap)
+                } else {
+                    canvas.drawBitmap(
+                        bitmap,
+                        tempSrcRect.apply {
+                            set(0, 0, scaledWidth, scaledHeight)
+                        },
+                        tempDestRect,
+                        tempPaint.apply { reset() }
+                    )
+                    bitmapPool.recycle(bitmap)
                 }
+                backgroundView.unlockCanvasAndPost(canvas)
             }
             val drawTime = SystemClock.uptimeMillis()
             Log.d(TAG, "draw=${drawTime - blurTime}")
