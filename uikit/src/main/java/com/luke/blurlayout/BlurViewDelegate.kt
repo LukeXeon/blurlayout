@@ -129,8 +129,11 @@ constructor(
         }
     }
 
-    private class BackgroundLayout(context: Context) : ViewGroup(context) {
+    private class BackgroundLayout(context: Context) : ViewGroup(context),
+        TextureView.SurfaceTextureListener {
+        private val lock = Any()
         private val texture = TextureView(context)
+        private var surface: Surface? = null
         var skipDrawing: Boolean = false
             set(value) {
                 field = value
@@ -139,16 +142,29 @@ constructor(
 
         @WorkerThread
         fun lockCanvas(): Canvas? {
-            return texture.lockCanvas()
+            synchronized(lock) {
+                val s = surface
+                if (s != null) {
+                    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        s.lockHardwareCanvas()
+                    } else {
+                        s.lockCanvas(null)
+                    }
+                }
+                return null
+            }
         }
 
         @WorkerThread
         fun unlockCanvasAndPost(canvas: Canvas) {
-            return texture.unlockCanvasAndPost(canvas)
+            synchronized(lock) {
+                surface?.unlockCanvasAndPost(canvas)
+            }
         }
 
         init {
             texture.isOpaque = false
+            texture.surfaceTextureListener = this
             attachViewToParent(
                 texture,
                 0,
@@ -172,6 +188,27 @@ constructor(
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             texture.measure(widthMeasureSpec, heightMeasureSpec)
             setMeasuredDimension(texture.measuredWidth, texture.measuredHeight)
+        }
+
+        override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
+            synchronized(lock) {
+                this.surface = Surface(surface)
+            }
+        }
+
+        override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
+        }
+
+        override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
+            synchronized(lock) {
+                this.surface?.release()
+                this.surface = null
+                return true
+            }
+        }
+
+        override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
+
         }
     }
 
@@ -362,6 +399,7 @@ constructor(
                         }
                     )
                     canvas.restore()
+                    backgroundView.unlockCanvasAndPost(canvas)
                     bitmapPool.recycle(clipBitmap)
                 } else {
                     canvas.drawBitmap(
@@ -372,9 +410,9 @@ constructor(
                         tempDestRect,
                         tempPaint.apply { reset() }
                     )
+                    backgroundView.unlockCanvasAndPost(canvas)
                     bitmapPool.recycle(bitmap)
                 }
-                backgroundView.unlockCanvasAndPost(canvas)
             }
             val drawTime = SystemClock.uptimeMillis()
             Log.d(TAG, "draw=${drawTime - blurTime}")
