@@ -17,11 +17,10 @@ import android.view.*
 import android.widget.FrameLayout
 import androidx.annotation.FloatRange
 import androidx.annotation.Px
-import androidx.annotation.WorkerThread
 import com.bumptech.glide.Glide
-import java.lang.RuntimeException
 import java.lang.ref.WeakReference
 import java.lang.reflect.Field
+import java.lang.reflect.InvocationTargetException
 import java.util.*
 import kotlin.math.max
 import kotlin.math.min
@@ -37,21 +36,14 @@ constructor(
     ImageReader.OnImageAvailableListener,
     View.OnAttachStateChangeListener,
     View.OnLayoutChangeListener {
-    private var workerThread: HandlerThread? = null
-    private var worker: Handler? = null
 
-    @Volatile
-    private var background: BackgroundLayout? = null
+    private val background = BackgroundView(attachView.context.applicationContext)
     private var renderScript: RenderScript? = null
     private var blur: ScriptIntrinsicBlur? = null
     private var imageReader: ImageReader? = null
-    private var lastTimeBatch: Bitmap? = null
     private val processLock = Any()
-    private val tempPaint = Paint()
-    private val tempDrawingRectF = RectF()
     private val tempCanvas = Canvas()
     private val tempSrcRect = Rect()
-    private val tempDestRect = Rect()
     private val tempVisibleRect = Rect()
     private val tempLayoutParams = ViewGroup.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -59,28 +51,30 @@ constructor(
     )
     private val tempOptions = BitmapFactory.Options()
     private val currentView: FrameLayout?
-        get() = background?.parent as? FrameLayout
+        get() = background.parent as? FrameLayout
 
-    @Px
-    @Volatile
-    var cornerRadius: Int = 0
+    var cornerRadius: Int
+        get() {
+            return background.cornerRadius
+        }
         set(value) {
-            field = max(0, value)
-            background?.invalidate()
+            background.cornerRadius = value
         }
 
-    @Volatile
-    var blurSampling: Float = 4f
+    var blurSampling: Float
+        get() {
+            return background.blurSampling
+        }
         set(value) {
-            field = max(1f, value)
-            background?.invalidate()
+            background.blurSampling = value
         }
 
-    @Volatile
-    var blurRadius: Float = 10f
-        set(@FloatRange(from = 0.0, to = 25.0) value) {
-            field = max(25f, min(0f, value))
-            background?.invalidate()
+    var blurRadius: Float
+        get() {
+            return background.blurRadius
+        }
+        set(value) {
+            background.blurRadius = value
         }
 
     init {
@@ -114,7 +108,6 @@ constructor(
         }
     }
 
-
     private interface BitmapPool {
         operator fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap
 
@@ -131,130 +124,157 @@ constructor(
         }
     }
 
-    private class BackgroundLayout(context: Context) : ViewGroup(context),
-        TextureView.SurfaceTextureListener {
-        private val textureView = TextureView(context)
+    private class BackgroundView(context: Context) : View(context) {
 
-        @Volatile
-        private var surfaceTexture: SurfaceTexture? = null
-        private var surface: Surface? = null
         var skipDrawing: Boolean = false
             set(value) {
                 field = value
                 invalidate()
             }
 
-        @WorkerThread
-        fun lockCanvas(): Canvas? {
-            val surfaceTexture = this.surfaceTexture
-            var surface = this.surface
-            if (surface == null && surfaceTexture != null) {
-                surface = Surface(surfaceTexture)
-                this.surface = surface
+        @Px
+        @Volatile
+        var cornerRadius: Int = 0
+            set(value) {
+                field = max(0, value)
+                invalidate()
             }
-            return when {
-                surface == null -> {
-                    return null
+
+        @Volatile
+        var blurSampling: Float = 4f
+            set(value) {
+                field = max(1f, value)
+                invalidate()
+            }
+
+        @Volatile
+        var blurRadius: Float = 10f
+            set(@FloatRange(from = 0.0, to = 25.0) value) {
+                field = max(25f, min(0f, value))
+                invalidate()
+            }
+
+        @Volatile
+        private var pendingFrame: Bitmap? = null
+
+        @Volatile
+        private var frame: Bitmap? = null
+
+        private val lock = Any()
+        private val destRect = Rect()
+        private val paint = Paint()
+        private val drawRoundRectF = RectF()
+        private val updateFrameRunnable = Runnable {
+            var newValue: Bitmap?
+            synchronized(lock) {
+                val oldValue = this.frame
+                if (oldValue != null) {
+                    bitmapPool.recycle(oldValue)
                 }
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
-                    surface.lockHardwareCanvas()
+                newValue = this.pendingFrame
+                this.pendingFrame = null
+            }
+            this.frame = newValue
+            invalidate()
+        }
+
+        fun updateFrame(bitmap: Bitmap) {
+            var postTask: Boolean
+            synchronized(lock) {
+                val oldPendingFrame = pendingFrame
+                if (oldPendingFrame != null) {
+                    bitmapPool.recycle(oldPendingFrame)
                 }
-                else -> {
-                    surface.lockCanvas(null)
+                postTask = oldPendingFrame == null
+                pendingFrame = bitmap
+            }
+            if (!postTask) {
+                return
+            }
+            post(updateFrameRunnable)
+        }
+
+        override fun onDetachedFromWindow() {
+            super.onDetachedFromWindow()
+            synchronized(lock) {
+                val frame = frame
+                if (frame != null) {
+                    bitmapPool.recycle(frame)
+                }
+                val pendingFrame = pendingFrame
+                if (pendingFrame != null && frame != pendingFrame) {
+                    bitmapPool.recycle(pendingFrame)
                 }
             }
         }
 
-        @WorkerThread
-        fun unlockCanvasAndPost(canvas: Canvas) {
-            val surfaceTexture = this.surfaceTexture
-            val surface = this.surface
-            if (surface != null) {
-                surface.unlockCanvasAndPost(canvas)
-                if (surfaceTexture == null) {
-                    surface.release()
-                    this.surface = null
-                }
+        override fun onDraw(canvas: Canvas) {
+            val frame = frame
+            if (skipDrawing || frame == null) {
+                return
             }
-        }
-
-        init {
-            textureView.isOpaque = false
-            textureView.surfaceTextureListener = this
-            attachViewToParent(
-                textureView,
+            destRect.set(
                 0,
-                LayoutParams(
-                    LayoutParams.MATCH_PARENT,
-                    LayoutParams.MATCH_PARENT
-                )
+                0,
+                width,
+                height
             )
-        }
-
-        override fun dispatchDraw(canvas: Canvas?) {
-            if (!skipDrawing) {
-                super.dispatchDraw(canvas)
+            val scaledWidth = (width / blurSampling).toInt()
+            val scaledHeight = (height / blurSampling).toInt()
+            if (cornerRadius > 0) {
+                val bgShader = loadShaderCache(frame)
+                canvas.save()
+                // 经过渲染的Bitmap由于缩放的关系
+                // 可能会比View小，所以要做特殊处理，把它放大回去
+                canvas.scale(
+                    blurSampling,
+                    blurSampling
+                )
+                canvas.drawRoundRect(
+                    drawRoundRectF.apply {
+                        set(destRect)
+                    },
+                    cornerRadius / blurSampling,
+                    cornerRadius / blurSampling,
+                    paint.apply {
+                        reset()
+                        shader = bgShader
+                    }
+                )
+                canvas.restore()
+            } else {
+                canvas.drawBitmap(
+                    frame,
+                    destRect.apply {
+                        set(0, 0, scaledWidth, scaledHeight)
+                    },
+                    destRect,
+                    paint.apply { reset() }
+                )
             }
-        }
-
-        override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-            textureView.layout(l, t, r, b)
-        }
-
-        override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
-            surfaceTexture = surface
-        }
-
-        override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
-
-        }
-
-        override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
-            surfaceTexture = null
-            return true
-        }
-
-        override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
-
         }
 
     }
 
     override fun onViewAttachedToWindow(v: View) {
         v.viewTreeObserver.addOnPreDrawListener(this)
-        val p = v as ViewGroup
-        val application = v.context.applicationContext
-        val view = BackgroundLayout(application)
-        p.addView(
-            view,
-            tempLayoutParams
-        )
-        val rs = RenderScript.create(application)
+        (v as ViewGroup).addView(background, tempLayoutParams)
+        val rs = RenderScript.create(v.context.applicationContext)
         val rsb = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
-        val t = HandlerThread(
-            toString(),
-            Process.THREAD_PRIORITY_FOREGROUND
-        ).apply { start() }
-        val h = Handler(t.looper)
-        background = view
-        renderScript = rs
-        blur = rsb
-        workerThread = t
-        worker = h
+        synchronized(processLock) {
+            renderScript = rs
+            blur = rsb
+        }
     }
 
     override fun onViewDetachedFromWindow(v: View) {
         v.viewTreeObserver.removeOnPreDrawListener(this)
-        workerThread?.quit()
-        workerThread = null
-        worker = null
         imageReader?.close()
         imageReader = null
         val background = this.background
-        if (background?.parent == v && v is ViewGroup) {
+        if (background.parent == v && v is ViewGroup) {
             v.removeView(background)
         }
-        this.background = null
         synchronized(processLock) {
             blur?.destroy()
             blur = null
@@ -269,7 +289,7 @@ constructor(
         val rootView = currentView?.rootView
         val recorder = imageReader
         val background = background
-        if (view != null && background != null) {
+        if (view != null) {
             val index = view.indexOfChild(background)
             if (index == -1) {
                 view.addView(
@@ -319,14 +339,9 @@ constructor(
     }
 
     override fun onImageAvailable(reader: ImageReader) {
-        val last = lastTimeBatch
-        if (last != null) {
-            bitmapPool.recycle(last)
-        }
         val image = reader.acquireLatestImageCompat() ?: return
         val blurRadius = this.blurRadius
         val cornerRadius = this.cornerRadius
-        val blurSampling = this.blurSampling
         val scaledWidth = reader.width
         val scaledHeight = reader.height
         val startTime = SystemClock.uptimeMillis()
@@ -364,66 +379,26 @@ constructor(
         }
         val blurTime = SystemClock.uptimeMillis()
         Log.d(TAG, "blur=${blurTime - bitmapTime}")
-        val backgroundView = this.background ?: return
-        val canvas = backgroundView.lockCanvas()
-        if (canvas != null) {
-            tempDestRect.set(
-                0,
-                0,
-                canvas.width,
-                canvas.height
+        if (cornerRadius > 0) {
+            val clipBitmap = bitmapPool[
+                    scaledWidth,
+                    scaledHeight,
+                    Bitmap.Config.ARGB_8888
+            ]
+            tempCanvas.setBitmap(clipBitmap)
+            tempCanvas.drawBitmap(
+                bitmap,
+                tempSrcRect.apply {
+                    set(0, 0, scaledWidth, scaledHeight)
+                },
+                tempSrcRect,
+                null
             )
-            if (cornerRadius > 0) {
-                val clipBitmap = bitmapPool[
-                        scaledWidth,
-                        scaledHeight,
-                        Bitmap.Config.ARGB_8888
-                ]
-                tempCanvas.setBitmap(clipBitmap)
-                tempCanvas.drawBitmap(
-                    bitmap,
-                    tempSrcRect.apply {
-                        set(0, 0, scaledWidth, scaledHeight)
-                    },
-                    tempSrcRect,
-                    null
-                )
-                tempCanvas.setBitmap(null)
-                bitmapPool.recycle(bitmap)
-                val backgroundShader = loadShaderCache(clipBitmap)
-                canvas.save()
-                // 经过渲染的Bitmap由于缩放的关系
-                // 可能会比View小，所以要做特殊处理，把它放大回去
-                canvas.scale(
-                    blurSampling,
-                    blurSampling
-                )
-                canvas.drawRoundRect(
-                    tempDrawingRectF.apply {
-                        set(tempSrcRect)
-                    },
-                    cornerRadius / blurSampling,
-                    cornerRadius / blurSampling,
-                    tempPaint.apply {
-                        reset()
-                        shader = backgroundShader
-                    }
-                )
-                canvas.restore()
-                backgroundView.unlockCanvasAndPost(canvas)
-                lastTimeBatch = clipBitmap
-            } else {
-                canvas.drawBitmap(
-                    bitmap,
-                    tempSrcRect.apply {
-                        set(0, 0, scaledWidth, scaledHeight)
-                    },
-                    tempDestRect,
-                    tempPaint.apply { reset() }
-                )
-                backgroundView.unlockCanvasAndPost(canvas)
-                lastTimeBatch = bitmap
-            }
+            tempCanvas.setBitmap(null)
+            bitmapPool.recycle(bitmap)
+            background.updateFrame(clipBitmap)
+        } else {
+            background.updateFrame(bitmap)
         }
         val drawTime = SystemClock.uptimeMillis()
         Log.d(TAG, "draw=${drawTime - blurTime}")
@@ -441,7 +416,6 @@ constructor(
         oldRight: Int,
         oldBottom: Int
     ) {
-        val handler = worker ?: return
         val width = view.width
         val height = view.height
         val recorder = imageReader
@@ -457,7 +431,7 @@ constructor(
                     PixelFormat.RGBA_8888,
                     30
                 )
-                r.setOnImageAvailableListener(this, handler)
+                r.setOnImageAvailableListener(this, worker)
                 imageReader = r
             }
         } else {
@@ -502,6 +476,17 @@ constructor(
             }
         }
 
+        private val workerThread by lazy {
+            HandlerThread(
+                toString(),
+                Process.THREAD_PRIORITY_FOREGROUND
+            ).apply { start() }
+        }
+
+        private val worker by lazy {
+            createAsync(workerThread.looper)
+        }
+
         private val shaderCaches by lazy { LinkedList<WeakReference<BitmapShader>>() }
 
         private val BitmapShader.bitmap: Bitmap by object : Any(), () -> Field {
@@ -517,6 +502,35 @@ constructor(
             operator fun getValue(shader: BitmapShader, property: KProperty<*>): Bitmap {
                 return field.get(shader) as Bitmap
             }
+        }
+
+        private fun createAsync(looper: Looper): Handler {
+            if (Build.VERSION.SDK_INT >= 28) {
+                return Handler.createAsync(looper)
+            }
+            try {
+                return Handler::class.java.getDeclaredConstructor(
+                    Looper::class.java, Handler.Callback::class.java,
+                    Boolean::class.javaPrimitiveType
+                ).newInstance(looper, null, true)
+            } catch (ignored: IllegalAccessException) {
+            } catch (ignored: InstantiationException) {
+            } catch (ignored: NoSuchMethodException) {
+            } catch (e: InvocationTargetException) {
+                val cause = e.cause
+                if (cause is RuntimeException) {
+                    throw (cause as RuntimeException?)!!
+                }
+                if (cause is Error) {
+                    throw cause
+                }
+                throw RuntimeException(cause)
+            }
+            Log.v(
+                TAG,
+                "Unable to invoke Handler(Looper, Callback, boolean) constructor"
+            )
+            return Handler(looper)
         }
 
         private fun ImageReader.acquireLatestImageCompat(): Image? {
