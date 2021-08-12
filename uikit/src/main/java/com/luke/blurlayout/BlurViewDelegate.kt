@@ -45,6 +45,7 @@ constructor(
     private var renderScript: RenderScript? = null
     private var blur: ScriptIntrinsicBlur? = null
     private var imageReader: ImageReader? = null
+    private var lastTimeBatch: Bitmap? = null
     private val processLock = Any()
     private val tempPaint = Paint()
     private val tempDrawingRectF = RectF()
@@ -130,8 +131,13 @@ constructor(
         }
     }
 
-    private class BackgroundLayout(context: Context) : ViewGroup(context) {
-        private val texture = TextureView(context)
+    private class BackgroundLayout(context: Context) : ViewGroup(context),
+        TextureView.SurfaceTextureListener {
+        private val textureView = TextureView(context)
+
+        @Volatile
+        private var surfaceTexture: SurfaceTexture? = null
+        private var surface: Surface? = null
         var skipDrawing: Boolean = false
             set(value) {
                 field = value
@@ -140,18 +146,43 @@ constructor(
 
         @WorkerThread
         fun lockCanvas(): Canvas? {
-            return texture.lockCanvas()
+            val surfaceTexture = this.surfaceTexture
+            var surface = this.surface
+            if (surface == null && surfaceTexture != null) {
+                surface = Surface(surfaceTexture)
+                this.surface = surface
+            }
+            return when {
+                surface == null -> {
+                    return null
+                }
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
+                    surface.lockHardwareCanvas()
+                }
+                else -> {
+                    surface.lockCanvas(null)
+                }
+            }
         }
 
         @WorkerThread
         fun unlockCanvasAndPost(canvas: Canvas) {
-            texture.unlockCanvasAndPost(canvas)
+            val surfaceTexture = this.surfaceTexture
+            val surface = this.surface
+            if (surface != null) {
+                surface.unlockCanvasAndPost(canvas)
+                if (surfaceTexture == null) {
+                    surface.release()
+                    this.surface = null
+                }
+            }
         }
 
         init {
-            texture.isOpaque = false
+            textureView.isOpaque = false
+            textureView.surfaceTextureListener = this
             attachViewToParent(
-                texture,
+                textureView,
                 0,
                 LayoutParams(
                     LayoutParams.MATCH_PARENT,
@@ -167,7 +198,24 @@ constructor(
         }
 
         override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-            texture.layout(l, t, r, b)
+            textureView.layout(l, t, r, b)
+        }
+
+        override fun onSurfaceTextureAvailable(surface: SurfaceTexture, width: Int, height: Int) {
+            surfaceTexture = surface
+        }
+
+        override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture, width: Int, height: Int) {
+
+        }
+
+        override fun onSurfaceTextureDestroyed(surface: SurfaceTexture): Boolean {
+            surfaceTexture = null
+            return true
+        }
+
+        override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {
+
         }
 
     }
@@ -271,6 +319,10 @@ constructor(
     }
 
     override fun onImageAvailable(reader: ImageReader) {
+        val last = lastTimeBatch
+        if (last != null) {
+            bitmapPool.recycle(last)
+        }
         val image = reader.acquireLatestImageCompat() ?: return
         val blurRadius = this.blurRadius
         val cornerRadius = this.cornerRadius
@@ -359,7 +411,7 @@ constructor(
                 )
                 canvas.restore()
                 backgroundView.unlockCanvasAndPost(canvas)
-                bitmapPool.recycle(clipBitmap)
+                lastTimeBatch = clipBitmap
             } else {
                 canvas.drawBitmap(
                     bitmap,
@@ -370,7 +422,7 @@ constructor(
                     tempPaint.apply { reset() }
                 )
                 backgroundView.unlockCanvasAndPost(canvas)
-                bitmapPool.recycle(bitmap)
+                lastTimeBatch = bitmap
             }
         }
         val drawTime = SystemClock.uptimeMillis()
@@ -437,7 +489,7 @@ constructor(
                 val innerPool = Glide.get(context).bitmapPool
                 return@lazy object : BitmapPool {
                     override fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap {
-                        return innerPool.get(width, height, config)
+                        return innerPool.getDirty(width, height, config)
                     }
 
                     override fun recycle(bitmap: Bitmap) {
