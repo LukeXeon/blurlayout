@@ -13,7 +13,7 @@ class BlurLayout @JvmOverloads constructor(
 
     private val delegate = BlurViewDelegate(this, attrs, defStyleAttr)
 
-    var cornerRadius: Int
+    var cornerRadius: Float
         get() = delegate.cornerRadius
         set(value) {
             delegate.cornerRadius = value

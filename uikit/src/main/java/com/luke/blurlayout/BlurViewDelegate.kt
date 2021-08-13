@@ -13,18 +13,18 @@ import android.renderscript.RenderScript
 import android.renderscript.ScriptIntrinsicBlur
 import android.util.AttributeSet
 import android.util.Log
-import android.view.*
+import android.view.View
+import android.view.ViewGroup
+import android.view.ViewOutlineProvider
+import android.view.ViewTreeObserver
 import android.widget.FrameLayout
 import androidx.annotation.FloatRange
 import androidx.annotation.Px
+import androidx.annotation.RequiresApi
 import com.bumptech.glide.Glide
-import java.lang.ref.WeakReference
-import java.lang.reflect.Field
 import java.lang.reflect.InvocationTargetException
-import java.util.*
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.reflect.KProperty
 
 class BlurViewDelegate
 @JvmOverloads
@@ -42,8 +42,6 @@ constructor(
     private var blur: ScriptIntrinsicBlur? = null
     private var imageReader: ImageReader? = null
     private val processLock = Any()
-    private val tempCanvas = Canvas()
-    private val tempSrcRect = Rect()
     private val tempVisibleRect = Rect()
     private val tempLayoutParams = ViewGroup.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -53,7 +51,7 @@ constructor(
     private val currentView: FrameLayout?
         get() = background.parent as? FrameLayout
 
-    var cornerRadius: Int
+    var cornerRadius: Float
         get() {
             return background.cornerRadius
         }
@@ -101,26 +99,25 @@ constructor(
             val a = attachView.context.obtainStyledAttributes(
                 attrs, R.styleable.BlurView, defStyleAttr, 0
             )
-            cornerRadius = a.getDimensionPixelSize(R.styleable.BlurView_cornerRadius, 0)
+            cornerRadius = a.getDimension(R.styleable.BlurView_cornerRadius, 0f)
             blurSampling = a.getFloat(R.styleable.BlurView_blurSampling, 4f)
             blurRadius = a.getFloat(R.styleable.BlurView_blurRadius, 10f)
             a.recycle()
         }
     }
 
-    private interface BitmapPool {
+    private interface BitmapPoolAdapter {
         operator fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap
 
         fun recycle(bitmap: Bitmap)
     }
 
-    private class NonBitmapPool : BitmapPool {
-        override fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap {
-            return Bitmap.createBitmap(width, height, config)
-        }
+    @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
+    private class BackgroundOutlineProvider : ViewOutlineProvider() {
 
-        override fun recycle(bitmap: Bitmap) {
-            bitmap.recycle()
+        override fun getOutline(view: View, outline: Outline) {
+            val background = view as BackgroundView
+            outline.setRoundRect(0, 0, view.width, view.height, background.cornerRadius)
         }
     }
 
@@ -134,10 +131,12 @@ constructor(
 
         @Px
         @Volatile
-        var cornerRadius: Int = 0
+        var cornerRadius: Float = 0f
             set(value) {
-                field = max(0, value)
-                invalidate()
+                field = max(0f, value)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    invalidateOutline()
+                }
             }
 
         @Volatile
@@ -161,21 +160,32 @@ constructor(
         private var frame: Bitmap? = null
 
         private val lock = Any()
-        private val destRect = Rect()
+        private val rect = Rect()
+        private val rectF = RectF()
         private val paint = Paint()
-        private val drawRoundRectF = RectF()
+        private val path = Path()
         private val updateFrameRunnable = Runnable {
             var newValue: Bitmap?
             synchronized(lock) {
-                val oldValue = this.frame
-                if (oldValue != null) {
-                    bitmapPool.recycle(oldValue)
+                val oldFrame = frame
+                if (oldFrame != null) {
+                    bitmapPool.recycle(oldFrame)
                 }
                 newValue = this.pendingFrame
                 this.pendingFrame = null
             }
             this.frame = newValue
             invalidate()
+        }
+
+        init {
+            paint.isAntiAlias = true
+            paint.isDither = true
+            paint.isFilterBitmap = true
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                outlineProvider = BackgroundOutlineProvider()
+                clipToOutline = true
+            }
         }
 
         fun updateFrame(bitmap: Bitmap) {
@@ -197,61 +207,56 @@ constructor(
         override fun onDetachedFromWindow() {
             super.onDetachedFromWindow()
             synchronized(lock) {
-                val frame = frame
+                val frame = this.frame
                 if (frame != null) {
                     bitmapPool.recycle(frame)
+                    this.frame = null
                 }
-                val pendingFrame = pendingFrame
-                if (pendingFrame != null && frame != pendingFrame) {
+                val pendingFrame = this.pendingFrame
+                if (pendingFrame != null) {
                     bitmapPool.recycle(pendingFrame)
+                    this.pendingFrame = null
                 }
             }
         }
 
         override fun onDraw(canvas: Canvas) {
-            val frame = frame
+            val frame = this.frame
             if (skipDrawing || frame == null) {
                 return
             }
-            destRect.set(
-                0,
-                0,
-                width,
-                height
-            )
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP && cornerRadius > 0) {
+                path.apply {
+                    reset()
+                    addRoundRect(rectF.apply {
+                        set(
+                            0f,
+                            0f,
+                            width.toFloat(),
+                            height.toFloat()
+                        )
+                    }, cornerRadius, cornerRadius, Path.Direction.CCW)
+                    close()
+                }
+                canvas.clipPath(path)
+            }
+
             val scaledWidth = (width / blurSampling).toInt()
             val scaledHeight = (height / blurSampling).toInt()
-            if (cornerRadius > 0) {
-                val bgShader = loadShaderCache(frame)
-                canvas.save()
-                // 经过渲染的Bitmap由于缩放的关系
-                // 可能会比View小，所以要做特殊处理，把它放大回去
-                canvas.scale(
-                    blurSampling,
-                    blurSampling
-                )
-                canvas.drawRoundRect(
-                    drawRoundRectF.apply {
-                        set(destRect)
-                    },
-                    cornerRadius / blurSampling,
-                    cornerRadius / blurSampling,
-                    paint.apply {
-                        reset()
-                        shader = bgShader
-                    }
-                )
-                canvas.restore()
-            } else {
-                canvas.drawBitmap(
-                    frame,
-                    destRect.apply {
-                        set(0, 0, scaledWidth, scaledHeight)
-                    },
-                    destRect,
-                    paint.apply { reset() }
-                )
-            }
+            // 经过渲染的Bitmap由于缩放的关系
+            // 可能会比View小，所以要做特殊处理，把它放大回去
+            canvas.scale(
+                blurSampling,
+                blurSampling
+            )
+            canvas.drawBitmap(
+                frame,
+                rect.apply {
+                    set(0, 0, scaledWidth, scaledHeight)
+                },
+                rect,
+                paint
+            )
         }
 
     }
@@ -341,7 +346,6 @@ constructor(
     override fun onImageAvailable(reader: ImageReader) {
         val image = reader.acquireLatestImageCompat() ?: return
         val blurRadius = this.blurRadius
-        val cornerRadius = this.cornerRadius
         val scaledWidth = reader.width
         val scaledHeight = reader.height
         val startTime = SystemClock.uptimeMillis()
@@ -379,27 +383,8 @@ constructor(
         }
         val blurTime = SystemClock.uptimeMillis()
         Log.d(TAG, "blur=${blurTime - bitmapTime}")
-        if (cornerRadius > 0) {
-            val clipBitmap = bitmapPool[
-                    scaledWidth,
-                    scaledHeight,
-                    Bitmap.Config.ARGB_8888
-            ]
-            tempCanvas.setBitmap(clipBitmap)
-            tempCanvas.drawBitmap(
-                bitmap,
-                tempSrcRect.apply {
-                    set(0, 0, scaledWidth, scaledHeight)
-                },
-                tempSrcRect,
-                null
-            )
-            tempCanvas.setBitmap(null)
-            bitmapPool.recycle(bitmap)
-            background.updateFrame(clipBitmap)
-        } else {
-            background.updateFrame(bitmap)
-        }
+        bitmap.prepareToDraw()
+        background.updateFrame(bitmap)
         val drawTime = SystemClock.uptimeMillis()
         Log.d(TAG, "draw=${drawTime - blurTime}")
     }
@@ -461,9 +446,9 @@ constructor(
                     }
                 val context = mInitialApplicationField.get(sCurrentActivityThread) as Application
                 val innerPool = Glide.get(context).bitmapPool
-                return@lazy object : BitmapPool {
+                return@lazy object : BitmapPoolAdapter {
                     override fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap {
-                        return innerPool.getDirty(width, height, config)
+                        return innerPool.get(width, height, config)
                     }
 
                     override fun recycle(bitmap: Bitmap) {
@@ -472,7 +457,15 @@ constructor(
                 }
             } catch (e: Throwable) {
                 e.printStackTrace()
-                return@lazy NonBitmapPool()
+                return@lazy object : BitmapPoolAdapter {
+                    override fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap {
+                        return Bitmap.createBitmap(width, height, config)
+                    }
+
+                    override fun recycle(bitmap: Bitmap) {
+                        bitmap.recycle()
+                    }
+                }
             }
         }
 
@@ -485,23 +478,6 @@ constructor(
 
         private val worker by lazy {
             createAsync(workerThread.looper)
-        }
-
-        private val shaderCaches by lazy { LinkedList<WeakReference<BitmapShader>>() }
-
-        private val BitmapShader.bitmap: Bitmap by object : Any(), () -> Field {
-
-            override fun invoke(): Field {
-                return BitmapShader::class.java.getDeclaredField("mBitmap").apply {
-                    isAccessible = true
-                }
-            }
-
-            private val field by lazy(this)
-
-            operator fun getValue(shader: BitmapShader, property: KProperty<*>): Bitmap {
-                return field.get(shader) as Bitmap
-            }
         }
 
         private fun createAsync(looper: Looper): Handler {
@@ -570,29 +546,5 @@ constructor(
             return false
         }
 
-        private fun loadShaderCache(bitmap: Bitmap): BitmapShader {
-            if (bitmapPool is NonBitmapPool) {
-                return BitmapShader(bitmap, Shader.TileMode.MIRROR, Shader.TileMode.MIRROR)
-            }
-            synchronized(shaderCaches) {
-                val it = shaderCaches.iterator()
-                while (it.hasNext()) {
-                    val ref = it.next()
-                    val shader = ref.get()
-                    if (shader == null) {
-                        it.remove()
-                    } else if (shader.bitmap == bitmap) {
-                        return shader
-                    }
-                }
-                Log.d(
-                    TAG, "create shader for bitmap=$bitmap," +
-                            "current cache size=" + shaderCaches.size
-                )
-                val shader = BitmapShader(bitmap, Shader.TileMode.MIRROR, Shader.TileMode.MIRROR)
-                shaderCaches.addFirst(WeakReference(shader))
-                return shader
-            }
-        }
     }
 }
