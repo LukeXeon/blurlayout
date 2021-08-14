@@ -3,7 +3,6 @@ package open.source.uikit.blurlayout
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.*
-import android.media.Image
 import android.media.ImageReader
 import android.os.*
 import android.renderscript.Allocation
@@ -22,8 +21,10 @@ import androidx.annotation.RequiresApi
 import androidx.annotation.WorkerThread
 import open.source.uikit.R
 import open.source.uikit.common.BitmapPool
+import open.source.uikit.common.acquireLatestImageCompat
+import open.source.uikit.common.createAsync
+import open.source.uikit.common.use
 import java.io.Closeable
-import java.lang.reflect.InvocationTargetException
 import java.util.*
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.max
@@ -540,44 +541,6 @@ constructor(
         private val bitmapPool: BitmapPool
             get() = BitmapPool.default
 
-        private inline fun <R> Allocation.use(block: (Allocation) -> R): R {
-            var exception: Throwable? = null
-            try {
-                return block(this)
-            } catch (e: Throwable) {
-                exception = e
-                throw e
-            } finally {
-                when (exception) {
-                    null -> destroy()
-                    else -> try {
-                        destroy()
-                    } catch (closeException: Throwable) {
-                        exception.addSuppressed(closeException)
-                    }
-                }
-            }
-        }
-
-        @RequiresApi(Build.VERSION_CODES.KITKAT)
-        private fun ImageReader.acquireLatestImageCompat(): Image? {
-            try {
-                return this.acquireLatestImage()
-            } catch (e: RuntimeException) {
-                /* In API level 23 or below,  it will throw "java.lang.RuntimeException:
-           ImageReaderContext is not initialized" when ImageReader is closed. To make the
-           behavior consistent as newer API levels,  we make it return null Image instead.*/
-                if (!isImageReaderContextNotInitializedException(e)) {
-                    throw e // only catch RuntimeException:ImageReaderContext is not initialized
-                }
-            }
-            return null
-        }
-
-        private fun isImageReaderContextNotInitializedException(e: RuntimeException): Boolean {
-            return "ImageReaderContext is not initialized" == e.message
-        }
-
         private fun checkDirty(view: View): Boolean {
             if (!view.isDirty) {
                 return true
@@ -595,36 +558,6 @@ constructor(
                 p = p.parent as? ViewGroup
             }
             return false
-        }
-
-
-        private fun createAsync(looper: Looper): Handler {
-            if (Build.VERSION.SDK_INT >= 28) {
-                return Handler.createAsync(looper)
-            }
-            try {
-                return Handler::class.java.getDeclaredConstructor(
-                    Looper::class.java, Handler.Callback::class.java,
-                    Boolean::class.javaPrimitiveType
-                ).newInstance(looper, null, true)
-            } catch (ignored: IllegalAccessException) {
-            } catch (ignored: InstantiationException) {
-            } catch (ignored: NoSuchMethodException) {
-            } catch (e: InvocationTargetException) {
-                val cause = e.cause
-                if (cause is java.lang.RuntimeException) {
-                    throw cause
-                }
-                if (cause is Error) {
-                    throw cause
-                }
-                throw RuntimeException(cause)
-            }
-            Log.v(
-                TAG,
-                "Unable to invoke Handler(Looper, Callback, boolean) constructor"
-            )
-            return Handler(looper)
         }
     }
 }

@@ -1,7 +1,5 @@
 package open.source.uikit.common
 
-import android.annotation.SuppressLint
-import android.app.Application
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -23,8 +21,6 @@ interface BitmapPool {
 
     companion object {
 
-        private const val PREFERENCES_NAME = "open.source.uikit.preferences"
-
         private const val FACTORY_KEY = "factory"
 
         private const val APP_VERSION_KEY = "app_version"
@@ -32,22 +28,8 @@ interface BitmapPool {
         private const val NO_FACTORY = ""
 
         val default: BitmapPool by lazy {
-            try {
-                @SuppressLint("PrivateApi")
-                val activityThreadClass = Class.forName("android.app.ActivityThread")
-                val sCurrentActivityThreadField = activityThreadClass
-                    .getDeclaredField("sCurrentActivityThread")
-                    .apply {
-                        isAccessible = true
-                    }
-                val sCurrentActivityThread = sCurrentActivityThreadField.get(null)
-                val mInitialApplicationField = activityThreadClass
-                    .getDeclaredField("mInitialApplication")
-                    .apply {
-                        isAccessible = true
-                    }
-                val application = mInitialApplicationField
-                    .get(sCurrentActivityThread) as Application
+            val application = application
+            if (application != null) {
                 try {
                     val innerPool = Glide.get(application).bitmapPool
                     return@lazy object : BitmapPool {
@@ -105,8 +87,6 @@ interface BitmapPool {
                         e.printStackTrace()
                     }
                 }
-            } catch (ex: Throwable) {
-                ex.printStackTrace()
             }
             return@lazy object : BitmapPool {
                 override fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap {
