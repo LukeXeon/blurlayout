@@ -19,9 +19,13 @@ import android.view.ViewTreeObserver
 import androidx.annotation.FloatRange
 import androidx.annotation.Px
 import androidx.annotation.RequiresApi
+import androidx.annotation.WorkerThread
 import open.source.uikit.R
 import open.source.uikit.common.BitmapPool
+import java.io.Closeable
+import java.lang.reflect.InvocationTargetException
 import java.util.*
+import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.max
 import kotlin.math.min
 
@@ -32,33 +36,24 @@ constructor(
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr),
-    ViewTreeObserver.OnPreDrawListener,
-    ImageReader.OnImageAvailableListener {
+    ViewTreeObserver.OnPreDrawListener {
     private var workerThread: HandlerThread? = null
     private var worker: Handler? = null
     private var renderScript: RenderScript? = null
     private var blur: ScriptIntrinsicBlur? = null
-    private var imageReader: ImageReader? = null
+    private var recorder: Recorder? = null
     private val processLock = Any()
-    private val clipBitmapCanvas = Canvas()
-    private val clipBitmapRect = Rect()
     private val visibleRect = Rect()
     private val tempOptions = BitmapFactory.Options()
     private val parentView: ViewGroup?
         get() = parent as? ViewGroup
     private var attachViewSet: MutableSet<BlurView>?
         get() {
-            if (isAttachedToWindow) {
-                @Suppress("UNCHECKED_CAST")
-                return rootView.getTag(R.id.attach_view_set) as? MutableSet<BlurView>
-            } else {
-                return null
-            }
+            @Suppress("UNCHECKED_CAST")
+            return rootView.getTag(R.id.attach_view_set) as? MutableSet<BlurView>
         }
         set(value) {
-            if (isAttachedToWindow) {
-                rootView.setTag(R.id.attach_view_set, value)
-            }
+            rootView.setTag(R.id.attach_view_set, value)
         }
     private var skipDrawing: Boolean = false
         set(value) {
@@ -126,18 +121,198 @@ constructor(
         }
         tempOptions.inMutable = true
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            outlineProvider = ClipRoundRectOutlineProvider()
+            outlineProvider = RoundRectOutlineProvider()
             clipToOutline = true
         }
         setLayerType(LAYER_TYPE_HARDWARE, null)
     }
 
     @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
-    private class ClipRoundRectOutlineProvider : ViewOutlineProvider() {
+    private class RoundRectOutlineProvider : ViewOutlineProvider() {
 
         override fun getOutline(view: View, outline: Outline) {
             val background = view as BlurView
             outline.setRoundRect(0, 0, view.width, view.height, background.cornerRadius)
+        }
+    }
+
+    private abstract class Recorder(protected val callback: (Bitmap) -> Unit) : Closeable {
+
+        abstract fun onSizeChanged(width: Int, height: Int)
+
+        abstract fun lockCanvas(): Canvas
+
+        abstract fun unlockCanvasAndPost(canvas: Canvas)
+
+    }
+
+    @RequiresApi(Build.VERSION_CODES.KITKAT)
+    private inner class ImageReaderRecorder(callback: (Bitmap) -> Unit) : Recorder(callback),
+        ImageReader.OnImageAvailableListener {
+
+        private val clipBitmapCanvas = Canvas()
+        private val clipBitmapRect = Rect()
+        private var imageReader: ImageReader? = null
+        private var worker: Handler? = null
+
+        override fun onImageAvailable(reader: ImageReader) {
+            val image = reader.acquireLatestImageCompat() ?: return
+            val scaledWidth = reader.width
+            val scaledHeight = reader.height
+            val startTime = SystemClock.uptimeMillis()
+            val bitmap = image.use {
+                val plane = image.planes[0]
+                val bytes = plane.buffer
+                val pixelStride = plane.pixelStride
+                val rowStride = plane.rowStride
+                val rowPadding = rowStride - pixelStride * scaledWidth
+                val bitmap = bitmapPool[
+                        scaledWidth + rowPadding / pixelStride,
+                        scaledHeight,
+                        Bitmap.Config.ARGB_8888
+                ]
+                bitmap.copyPixelsFromBuffer(bytes)
+                return@use bitmap
+            }
+            val clipBitmap = bitmapPool[
+                    scaledWidth,
+                    scaledHeight,
+                    Bitmap.Config.ARGB_8888
+            ]
+            clipBitmapCanvas.setBitmap(clipBitmap)
+            clipBitmapCanvas.drawBitmap(
+                bitmap,
+                clipBitmapRect.apply {
+                    set(0, 0, scaledWidth, scaledHeight)
+                },
+                clipBitmapRect,
+                null
+            )
+            clipBitmapCanvas.setBitmap(null)
+            bitmapPool.recycle(bitmap)
+            val bitmapTime = SystemClock.uptimeMillis()
+            Log.d(TAG, "bitmap=${bitmapTime - startTime}")
+            callback(clipBitmap)
+        }
+
+        override fun onSizeChanged(width: Int, height: Int) {
+            if (width * height > 0) {
+                val thread = workerThread ?: return
+                val recorder = imageReader
+                var handler = worker
+                if (handler == null) {
+                    handler = Handler(thread.looper)
+                    worker = handler
+                }
+                val blurSampling = blurSampling
+                if (recorder == null || recorder.width != width && recorder.height != height) {
+                    val scaledWidth = (width / blurSampling).toInt()
+                    val scaledHeight = (height / blurSampling).toInt()
+                    imageReader?.close()
+                    @SuppressLint("WrongConstant")
+                    val r = ImageReader.newInstance(
+                        scaledWidth,
+                        scaledHeight,
+                        PixelFormat.RGBA_8888,
+                        30
+                    )
+                    r.setOnImageAvailableListener(
+                        this,
+                        handler
+                    )
+                    imageReader = r
+                }
+            } else {
+                imageReader?.close()
+                imageReader = null
+            }
+        }
+
+        override fun lockCanvas(): Canvas {
+            val surface = imageReader!!.surface
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                surface.lockHardwareCanvas()
+            } else {
+                surface.lockCanvas(null)
+            }
+        }
+
+        override fun unlockCanvasAndPost(canvas: Canvas) {
+            imageReader!!.surface.unlockCanvasAndPost(canvas)
+        }
+
+        override fun close() {
+            imageReader?.close()
+            imageReader = null
+        }
+    }
+
+    private inner class PictureRecorder(callback: (Bitmap) -> Unit) : Recorder(callback), Runnable {
+        private val size = IntArray(2)
+        private val tempCanvas = Canvas()
+        private val freeQueue = ConcurrentLinkedQueue<Picture>()
+        private val completeQueue = ConcurrentLinkedQueue<Picture>()
+        private var current: Picture? = null
+        private var worker: Handler? = null
+
+        override fun run() {
+            var picture: Picture? = null
+            while (true) {
+                val next = completeQueue.poll()
+                if (next == null) {
+                    break
+                } else {
+                    if (picture != null && freeQueue.size < 30) {
+                        freeQueue.add(picture)
+                    }
+                    picture = next
+                }
+            }
+            picture ?: return
+            val bitmap = bitmapPool[
+                    picture.width,
+                    picture.height,
+                    Bitmap.Config.ARGB_8888
+            ]
+            tempCanvas.setBitmap(bitmap)
+            tempCanvas.drawPicture(picture)
+            tempCanvas.setBitmap(null)
+            callback(bitmap)
+        }
+
+        override fun onSizeChanged(width: Int, height: Int) {
+            size[0] = (width / blurSampling).toInt()
+            size[1] = (height / blurSampling).toInt()
+        }
+
+        override fun lockCanvas(): Canvas {
+            val picture = freeQueue.poll() ?: Picture()
+            val canvas = picture.beginRecording(size[0], size[1])
+            current = picture
+            return canvas
+        }
+
+        override fun unlockCanvasAndPost(canvas: Canvas) {
+            val picture = current!!
+            picture.endRecording()
+            current = null
+            completeQueue.add(picture)
+            val thread = workerThread
+            if (thread != null) {
+                var worker = worker
+                if (worker == null) {
+                    worker = createAsync(thread.looper)
+                    this.worker = worker
+                }
+                if (!worker.hasMessages(0, this)) {
+                    worker.postAtTime(this, this, SystemClock.uptimeMillis())
+                }
+            }
+        }
+
+        override fun close() {
+            freeQueue.clear()
+            completeQueue.clear()
         }
     }
 
@@ -155,6 +330,41 @@ constructor(
             return
         }
         post(updateFrameRunnable)
+    }
+
+    @WorkerThread
+    private fun onFrameAvailable(bitmap: Bitmap) {
+        val bitmapTime = SystemClock.uptimeMillis()
+        synchronized(processLock) {
+            val blur = this.blur ?: return
+            val input = Allocation.createFromBitmap(
+                renderScript, bitmap, Allocation.MipmapControl.MIPMAP_NONE,
+                Allocation.USAGE_SCRIPT
+            )
+            input.use {
+                val output = Allocation.createTyped(renderScript, input.type)
+                output.use {
+                    blur.setInput(input)
+                    blur.setRadius(blurRadius)
+                    blur.forEach(output)
+                    output.copyTo(bitmap)
+                }
+            }
+        }
+        val blurTime = SystemClock.uptimeMillis()
+        Log.d(TAG, "blur=${blurTime - bitmapTime}")
+        val nextFrame =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && layerType == LAYER_TYPE_HARDWARE) {
+                val hwBitmap = bitmap.copy(Bitmap.Config.HARDWARE, false)
+                bitmapPool.recycle(bitmap)
+                hwBitmap
+            } else {
+                bitmap
+            }
+        nextFrame.prepareToDraw()
+        updateFrame(nextFrame)
+        val drawTime = SystemClock.uptimeMillis()
+        Log.d(TAG, "draw=${drawTime - blurTime}")
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -229,6 +439,11 @@ constructor(
             renderScript = rs
             blur = rsb
         }
+        recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            ImageReaderRecorder(this::onFrameAvailable)
+        } else {
+            PictureRecorder(this::onFrameAvailable)
+        }
     }
 
     override fun onDetachedFromWindow() {
@@ -255,8 +470,8 @@ constructor(
             }
         }
         viewTreeObserver.removeOnPreDrawListener(this)
-        imageReader?.close()
-        imageReader = null
+        recorder?.close()
+        recorder = null
         synchronized(processLock) {
             blur?.destroy()
             blur = null
@@ -270,7 +485,7 @@ constructor(
         val start = SystemClock.uptimeMillis()
         val view = parentView
         val rootView = parentView?.rootView
-        val recorder = imageReader
+        val recorder = recorder
         val attachSet = attachViewSet
         if (view != null && !attachSet.isNullOrEmpty()) {
             val index = view.indexOfChild(this)
@@ -287,12 +502,7 @@ constructor(
                 val blurSampling = blurSampling
                 if (width * height > 0) {
                     // 不需要绘制整个屏幕，只需要绘制View底下那一层就可以了
-                    val surface = recorder.surface
-                    val canvas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        surface.lockHardwareCanvas()
-                    } else {
-                        surface.lockCanvas(null)
-                    }
+                    val canvas = recorder.lockCanvas()
                     // 转换canvas来到View的绝对位置
                     canvas.scale(1f / blurSampling, 1f / blurSampling)
                     canvas.translate(
@@ -311,7 +521,7 @@ constructor(
                         }
                     }
                     // 结束录制
-                    surface.unlockCanvasAndPost(canvas)
+                    recorder.unlockCanvasAndPost(canvas)
                 }
             }
         }
@@ -319,108 +529,8 @@ constructor(
         return true
     }
 
-    override fun onImageAvailable(reader: ImageReader) {
-        val image = reader.acquireLatestImageCompat() ?: return
-        val blurRadius = this.blurRadius
-        val layerType = this.layerType
-        val scaledWidth = reader.width
-        val scaledHeight = reader.height
-        val startTime = SystemClock.uptimeMillis()
-        val bitmap = image.use {
-            val plane = image.planes[0]
-            val bytes = plane.buffer
-            val pixelStride = plane.pixelStride
-            val rowStride = plane.rowStride
-            val rowPadding = rowStride - pixelStride * scaledWidth
-            val bitmap = bitmapPool[
-                    scaledWidth + rowPadding / pixelStride,
-                    scaledHeight,
-                    Bitmap.Config.ARGB_8888
-            ]
-            bitmap.copyPixelsFromBuffer(bytes)
-            return@use bitmap
-        }
-        val clipBitmap = bitmapPool[
-                scaledWidth,
-                scaledHeight,
-                Bitmap.Config.ARGB_8888
-        ]
-        clipBitmapCanvas.setBitmap(clipBitmap)
-        clipBitmapCanvas.drawBitmap(
-            bitmap,
-            clipBitmapRect.apply {
-                set(0, 0, scaledWidth, scaledHeight)
-            },
-            clipBitmapRect,
-            null
-        )
-        clipBitmapCanvas.setBitmap(null)
-        bitmapPool.recycle(bitmap)
-        val bitmapTime = SystemClock.uptimeMillis()
-        Log.d(TAG, "bitmap=${bitmapTime - startTime}")
-        synchronized(processLock) {
-            val blur = this.blur ?: return
-            val input = Allocation.createFromBitmap(
-                renderScript, clipBitmap, Allocation.MipmapControl.MIPMAP_NONE,
-                Allocation.USAGE_SCRIPT
-            )
-            input.use {
-                val output = Allocation.createTyped(renderScript, input.type)
-                output.use {
-                    blur.setInput(input)
-                    blur.setRadius(blurRadius)
-                    blur.forEach(output)
-                    output.copyTo(clipBitmap)
-                }
-            }
-        }
-        val blurTime = SystemClock.uptimeMillis()
-        Log.d(TAG, "blur=${blurTime - bitmapTime}")
-        val nextFrame =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && layerType == LAYER_TYPE_HARDWARE) {
-                val hwBitmap = clipBitmap.copy(Bitmap.Config.HARDWARE, false)
-                bitmapPool.recycle(clipBitmap)
-                hwBitmap
-            } else {
-                clipBitmap
-            }
-        nextFrame.prepareToDraw()
-        updateFrame(nextFrame)
-        val drawTime = SystemClock.uptimeMillis()
-        Log.d(TAG, "draw=${drawTime - blurTime}")
-    }
-
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        if (w * h > 0) {
-            val thread = workerThread ?: return
-            val recorder = imageReader
-            var handler = worker
-            if (handler == null) {
-                handler = Handler(thread.looper)
-                worker = handler
-            }
-            val blurSampling = blurSampling
-            if (recorder == null || recorder.width != w && recorder.height != h) {
-                val scaledWidth = (w / blurSampling).toInt()
-                val scaledHeight = (h / blurSampling).toInt()
-                imageReader?.close()
-                @SuppressLint("WrongConstant")
-                val r = ImageReader.newInstance(
-                    scaledWidth,
-                    scaledHeight,
-                    PixelFormat.RGBA_8888,
-                    30
-                )
-                r.setOnImageAvailableListener(
-                    this,
-                    handler
-                )
-                imageReader = r
-            }
-        } else {
-            imageReader?.close()
-            imageReader = null
-        }
+        recorder?.onSizeChanged(w, h)
     }
 
     companion object {
@@ -449,6 +559,7 @@ constructor(
             }
         }
 
+        @RequiresApi(Build.VERSION_CODES.KITKAT)
         private fun ImageReader.acquireLatestImageCompat(): Image? {
             try {
                 return this.acquireLatestImage()
@@ -486,5 +597,34 @@ constructor(
             return false
         }
 
+
+        private fun createAsync(looper: Looper): Handler {
+            if (Build.VERSION.SDK_INT >= 28) {
+                return Handler.createAsync(looper)
+            }
+            try {
+                return Handler::class.java.getDeclaredConstructor(
+                    Looper::class.java, Handler.Callback::class.java,
+                    Boolean::class.javaPrimitiveType
+                ).newInstance(looper, null, true)
+            } catch (ignored: IllegalAccessException) {
+            } catch (ignored: InstantiationException) {
+            } catch (ignored: NoSuchMethodException) {
+            } catch (e: InvocationTargetException) {
+                val cause = e.cause
+                if (cause is java.lang.RuntimeException) {
+                    throw cause
+                }
+                if (cause is Error) {
+                    throw cause
+                }
+                throw RuntimeException(cause)
+            }
+            Log.v(
+                TAG,
+                "Unable to invoke Handler(Looper, Callback, boolean) constructor"
+            )
+            return Handler(looper)
+        }
     }
 }
