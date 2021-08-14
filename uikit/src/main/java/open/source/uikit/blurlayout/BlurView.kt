@@ -1,7 +1,6 @@
 package open.source.uikit.blurlayout
 
 import android.annotation.SuppressLint
-import android.app.Application
 import android.content.Context
 import android.graphics.*
 import android.media.Image
@@ -20,8 +19,8 @@ import android.view.ViewTreeObserver
 import androidx.annotation.FloatRange
 import androidx.annotation.Px
 import androidx.annotation.RequiresApi
-import com.bumptech.glide.Glide
 import open.source.uikit.R
+import open.source.uikit.common.BitmapPool
 import java.util.*
 import kotlin.math.max
 import kotlin.math.min
@@ -131,12 +130,6 @@ constructor(
             clipToOutline = true
         }
         setLayerType(LAYER_TYPE_HARDWARE, null)
-    }
-
-    private interface BitmapPoolAdapter {
-        operator fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap
-
-        fun recycle(bitmap: Bitmap)
     }
 
     @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
@@ -383,13 +376,14 @@ constructor(
         }
         val blurTime = SystemClock.uptimeMillis()
         Log.d(TAG, "blur=${blurTime - bitmapTime}")
-        val nextFrame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && layerType == LAYER_TYPE_HARDWARE) {
-            val hwBitmap = clipBitmap.copy(Bitmap.Config.HARDWARE, false)
-            bitmapPool.recycle(clipBitmap)
-            hwBitmap
-        } else {
-            clipBitmap
-        }
+        val nextFrame =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && layerType == LAYER_TYPE_HARDWARE) {
+                val hwBitmap = clipBitmap.copy(Bitmap.Config.HARDWARE, false)
+                bitmapPool.recycle(clipBitmap)
+                hwBitmap
+            } else {
+                clipBitmap
+            }
         nextFrame.prepareToDraw()
         updateFrame(nextFrame)
         val drawTime = SystemClock.uptimeMillis()
@@ -433,47 +427,8 @@ constructor(
 
         private const val TAG = "BlurView"
 
-        private val bitmapPool by lazy {
-            try {
-                @SuppressLint("PrivateApi")
-                val activityThreadClass = Class.forName("android.app.ActivityThread")
-                val sCurrentActivityThreadField = activityThreadClass
-                    .getDeclaredField("sCurrentActivityThread")
-                    .apply {
-                        isAccessible = true
-                    }
-                val sCurrentActivityThread = sCurrentActivityThreadField.get(null)
-                val mInitialApplicationField = activityThreadClass
-                    .getDeclaredField("mInitialApplication")
-                    .apply {
-                        isAccessible = true
-                    }
-                val context = mInitialApplicationField.get(sCurrentActivityThread) as Application
-                val innerPool = Glide.get(context).bitmapPool
-                return@lazy object :
-                    BitmapPoolAdapter {
-                    override fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap {
-                        return innerPool.get(width, height, config)
-                    }
-
-                    override fun recycle(bitmap: Bitmap) {
-                        innerPool.put(bitmap)
-                    }
-                }
-            } catch (e: Throwable) {
-                e.printStackTrace()
-                return@lazy object :
-                    BitmapPoolAdapter {
-                    override fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap {
-                        return Bitmap.createBitmap(width, height, config)
-                    }
-
-                    override fun recycle(bitmap: Bitmap) {
-                        bitmap.recycle()
-                    }
-                }
-            }
-        }
+        private val bitmapPool: BitmapPool
+            get() = BitmapPool.default
 
         private inline fun <R> Allocation.use(block: (Allocation) -> R): R {
             var exception: Throwable? = null
