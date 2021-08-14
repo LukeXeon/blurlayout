@@ -406,9 +406,9 @@ constructor(
                 renderScript, clipBitmap, Allocation.MipmapControl.MIPMAP_NONE,
                 Allocation.USAGE_SCRIPT
             )
-            AutoCloseable { input.destroy() }.use {
+            input.use {
                 val output = Allocation.createTyped(renderScript, input.type)
-                AutoCloseable { output.destroy() }.use {
+                output.use {
                     blur.setInput(input)
                     blur.setRadius(blurRadius)
                     blur.forEach(output)
@@ -550,6 +550,27 @@ constructor(
                 "Unable to invoke Handler(Looper, Callback, boolean) constructor"
             )
             return Handler(looper)
+        }
+
+        private inline fun <R> Allocation.use(block: (Allocation) -> R): R {
+            var exception: Throwable? = null
+            try {
+                return block(this)
+            } catch (e: Throwable) {
+                exception = e
+                throw e
+            } finally {
+                closeFinally(exception)
+            }
+        }
+
+        private fun Allocation.closeFinally(cause: Throwable?) = when (cause) {
+            null -> destroy()
+            else -> try {
+                destroy()
+            } catch (closeException: Throwable) {
+                cause.addSuppressed(closeException)
+            }
         }
 
         private fun ImageReader.acquireLatestImageCompat(): Image? {
