@@ -11,7 +11,7 @@ class BlurLayout @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
-    private val delegate = BlurViewDelegate(this, attrs, defStyleAttr)
+    private val delegate = BlurView(context, attrs, defStyleAttr)
 
     var cornerRadius: Float
         get() = delegate.cornerRadius
@@ -30,4 +30,8 @@ class BlurLayout @JvmOverloads constructor(
         set(value) {
             delegate.blurRadius = value
         }
+
+    init {
+        addView(delegate)
+    }
 }
