@@ -73,13 +73,13 @@ constructor(
     @Volatile
     private var frame: Bitmap? = null
 
-    private val frameLock = Any()
+    private val nextFrameLock = Any()
     private val drawingRect = Rect()
     private val clipCanvasRectF by lazy { RectF() }
     private val clipCanvasPath by lazy { Path() }
     private val updateFrameRunnable = Runnable {
         var newValue: Bitmap?
-        synchronized(frameLock) {
+        synchronized(nextFrameLock) {
             val oldFrame = frame
             if (oldFrame != null) {
                 bitmapPool.recycle(oldFrame)
@@ -127,10 +127,10 @@ constructor(
         }
         tempOptions.inMutable = true
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            outlineProvider =
-                ClipRoundRectOutlineProvider()
+            outlineProvider = ClipRoundRectOutlineProvider()
             clipToOutline = true
         }
+        setLayerType(LAYER_TYPE_HARDWARE, null)
     }
 
     private interface BitmapPoolAdapter {
@@ -148,21 +148,9 @@ constructor(
         }
     }
 
-    override fun setLayerType(layerType: Int, paint: Paint?) {
-        setLayerPaint(paint)
-    }
-
-    override fun getLayerType(): Int {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            LAYER_TYPE_HARDWARE
-        } else {
-            super.getLayerType()
-        }
-    }
-
     private fun updateFrame(bitmap: Bitmap) {
         var postTask: Boolean
-        synchronized(frameLock) {
+        synchronized(nextFrameLock) {
             val oldPendingFrame = pendingFrame
             if (oldPendingFrame != null) {
                 bitmapPool.recycle(oldPendingFrame)
@@ -178,6 +166,9 @@ constructor(
 
     override fun onDraw(canvas: Canvas) {
         val frame = this.frame
+        val cornerRadius = this.cornerRadius
+        val skipDrawing = this.skipDrawing
+        val blurSampling = this.blurSampling
         if (skipDrawing || frame == null) {
             return
         }
@@ -187,7 +178,10 @@ constructor(
         ) {
             return
         }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP && cornerRadius > 0) {
+        val isClip = (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP
+                || !canvas.isHardwareAccelerated) && cornerRadius > 0
+        if (isClip) {
+            canvas.save()
             clipCanvasPath.apply {
                 reset()
                 addRoundRect(clipCanvasRectF.apply {
@@ -218,6 +212,9 @@ constructor(
             drawingRect,
             null
         )
+        if (isClip) {
+            canvas.restore()
+        }
     }
 
     override fun onAttachedToWindow() {
@@ -252,12 +249,12 @@ constructor(
                 attachViewSet = null
             }
         }
-        synchronized(frameLock) {
-            val frame = this.frame
-            if (frame != null) {
-                bitmapPool.recycle(frame)
-                this.frame = null
-            }
+        val frame = this.frame
+        if (frame != null) {
+            bitmapPool.recycle(frame)
+            this.frame = null
+        }
+        synchronized(nextFrameLock) {
             val pendingFrame = this.pendingFrame
             if (pendingFrame != null) {
                 bitmapPool.recycle(pendingFrame)
@@ -332,6 +329,7 @@ constructor(
     override fun onImageAvailable(reader: ImageReader) {
         val image = reader.acquireLatestImageCompat() ?: return
         val blurRadius = this.blurRadius
+        val layerType = this.layerType
         val scaledWidth = reader.width
         val scaledHeight = reader.height
         val startTime = SystemClock.uptimeMillis()
@@ -385,14 +383,13 @@ constructor(
         }
         val blurTime = SystemClock.uptimeMillis()
         Log.d(TAG, "blur=${blurTime - bitmapTime}")
-        val nextFrame =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val hwBitmap = clipBitmap.copy(Bitmap.Config.HARDWARE, false)
-                bitmapPool.recycle(clipBitmap)
-                hwBitmap
-            } else {
-                clipBitmap
-            }
+        val nextFrame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && layerType == LAYER_TYPE_HARDWARE) {
+            val hwBitmap = clipBitmap.copy(Bitmap.Config.HARDWARE, false)
+            bitmapPool.recycle(clipBitmap)
+            hwBitmap
+        } else {
+            clipBitmap
+        }
         nextFrame.prepareToDraw()
         updateFrame(nextFrame)
         val drawTime = SystemClock.uptimeMillis()
@@ -504,10 +501,7 @@ constructor(
                 /* In API level 23 or below,  it will throw "java.lang.RuntimeException:
            ImageReaderContext is not initialized" when ImageReader is closed. To make the
            behavior consistent as newer API levels,  we make it return null Image instead.*/
-                if (!isImageReaderContextNotInitializedException(
-                        e
-                    )
-                ) {
+                if (!isImageReaderContextNotInitializedException(e)) {
                     throw e // only catch RuntimeException:ImageReaderContext is not initialized
                 }
             }
