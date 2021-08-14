@@ -190,6 +190,18 @@ constructor(
             }
         }
 
+        override fun setLayerType(layerType: Int, paint: Paint?) {
+            setLayerPaint(paint)
+        }
+
+        override fun getLayerType(): Int {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                LAYER_TYPE_HARDWARE
+            } else {
+                super.getLayerType()
+            }
+        }
+
         fun updateFrame(bitmap: Bitmap) {
             var postTask: Boolean
             synchronized(lock) {
@@ -225,6 +237,12 @@ constructor(
         override fun onDraw(canvas: Canvas) {
             val frame = this.frame
             if (skipDrawing || frame == null) {
+                return
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && !canvas.isHardwareAccelerated
+                && frame.config == Bitmap.Config.HARDWARE
+            ) {
                 return
             }
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP && cornerRadius > 0) {
@@ -400,8 +418,16 @@ constructor(
         }
         val blurTime = SystemClock.uptimeMillis()
         Log.d(TAG, "blur=${blurTime - bitmapTime}")
-        clipBitmap.prepareToDraw()
-        background.updateFrame(clipBitmap)
+        val nextFrame =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val hwBitmap = clipBitmap.copy(Bitmap.Config.HARDWARE, false)
+                bitmapPool.recycle(clipBitmap)
+                hwBitmap
+            } else {
+                clipBitmap
+            }
+        nextFrame.prepareToDraw()
+        background.updateFrame(nextFrame)
         val drawTime = SystemClock.uptimeMillis()
         Log.d(TAG, "draw=${drawTime - blurTime}")
     }
