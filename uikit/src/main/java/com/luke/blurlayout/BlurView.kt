@@ -252,7 +252,7 @@ constructor(
                 view.addView(this, 0)
             }
             if (rootView != null && recorder != null && checkDirty(view)) {
-                view.getGlobalVisibleRect(visibleRect)
+                getGlobalVisibleRect(visibleRect)
                 val width = visibleRect.width()
                 val height = visibleRect.height()
                 val blurSampling = blurSampling
