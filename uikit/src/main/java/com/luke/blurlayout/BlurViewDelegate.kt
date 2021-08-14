@@ -538,7 +538,7 @@ constructor(
             } catch (e: InvocationTargetException) {
                 val cause = e.cause
                 if (cause is RuntimeException) {
-                    throw (cause as RuntimeException?)!!
+                    throw cause
                 }
                 if (cause is Error) {
                     throw cause
