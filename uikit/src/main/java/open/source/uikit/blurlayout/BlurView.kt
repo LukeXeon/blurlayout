@@ -38,8 +38,6 @@ constructor(
     defStyleAttr: Int = 0
 ) : View(context, attrs, defStyleAttr),
     ViewTreeObserver.OnPreDrawListener {
-    private var workerThread: HandlerThread? = null
-    private var worker: Handler? = null
     private var renderScript: RenderScript? = null
     private var blur: ScriptIntrinsicBlur? = null
     private var recorder: Recorder? = null
@@ -139,22 +137,36 @@ constructor(
 
     private abstract class Recorder(protected val callback: (Bitmap) -> Unit) : Closeable {
 
+        protected var workerThread: HandlerThread? = null
+        protected var worker: Handler? = null
+
+        init {
+            workerThread = HandlerThread(
+                TAG + Recorder::class.java.simpleName,
+                Process.THREAD_PRIORITY_FOREGROUND
+            ).apply { start() }
+        }
+
         abstract fun onSizeChanged(width: Int, height: Int)
 
         abstract fun lockCanvas(): Canvas
 
         abstract fun unlockCanvasAndPost(canvas: Canvas)
 
+        override fun close() {
+            workerThread?.quit()
+            workerThread = null
+            worker = null
+        }
+
     }
 
     @RequiresApi(Build.VERSION_CODES.KITKAT)
     private inner class ImageReaderRecorder(callback: (Bitmap) -> Unit) : Recorder(callback),
         ImageReader.OnImageAvailableListener {
-
         private val clipBitmapCanvas = Canvas()
         private val clipBitmapRect = Rect()
         private var imageReader: ImageReader? = null
-        private var worker: Handler? = null
 
         override fun onImageAvailable(reader: ImageReader) {
             val image = reader.acquireLatestImageCompat() ?: return
@@ -243,6 +255,7 @@ constructor(
         }
 
         override fun close() {
+            super.close()
             imageReader?.close()
             imageReader = null
         }
@@ -254,7 +267,6 @@ constructor(
         private val freeQueue = ConcurrentLinkedQueue<Picture>()
         private val completeQueue = ConcurrentLinkedQueue<Picture>()
         private var current: Picture? = null
-        private var worker: Handler? = null
 
         override fun run() {
             var picture: Picture? = null
@@ -312,6 +324,7 @@ constructor(
         }
 
         override fun close() {
+            super.close()
             freeQueue.clear()
             completeQueue.clear()
         }
@@ -423,10 +436,6 @@ constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        workerThread = HandlerThread(
-            toString(),
-            Process.THREAD_PRIORITY_FOREGROUND
-        ).apply { start() }
         var set = attachViewSet
         if (set == null) {
             set = requireNotNull(Collections.newSetFromMap(WeakHashMap<BlurView, Boolean>()))
@@ -448,9 +457,6 @@ constructor(
     }
 
     override fun onDetachedFromWindow() {
-        workerThread?.quit()
-        workerThread = null
-        worker = null
         val set = attachViewSet
         if (set != null) {
             set.remove(this)
