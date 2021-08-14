@@ -1,4 +1,4 @@
-package com.luke.blurlayout
+package open.source.uikit.blurlayout
 
 import android.content.Context
 import android.util.AttributeSet

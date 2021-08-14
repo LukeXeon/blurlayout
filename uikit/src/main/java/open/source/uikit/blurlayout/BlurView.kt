@@ -1,4 +1,4 @@
-package com.luke.blurlayout
+package open.source.uikit.blurlayout
 
 import android.annotation.SuppressLint
 import android.app.Application
@@ -21,6 +21,7 @@ import androidx.annotation.FloatRange
 import androidx.annotation.Px
 import androidx.annotation.RequiresApi
 import com.bumptech.glide.Glide
+import open.source.uikit.R
 import kotlin.math.max
 import kotlin.math.min
 
@@ -41,7 +42,7 @@ constructor(
     private val clipBitmapRect = Rect()
     private val visibleRect = Rect()
     private val tempOptions = BitmapFactory.Options()
-    private val currentView: ViewGroup?
+    private val parentView: ViewGroup?
         get() = this.parent as? ViewGroup
     private var skipDrawing: Boolean = false
         set(value) {
@@ -109,7 +110,8 @@ constructor(
         }
         tempOptions.inMutable = true
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            outlineProvider = ClipRoundRectOutlineProvider()
+            outlineProvider =
+                ClipRoundRectOutlineProvider()
             clipToOutline = true
         }
     }
@@ -239,8 +241,8 @@ constructor(
 
     override fun onPreDraw(): Boolean {
         val start = SystemClock.uptimeMillis()
-        val view = currentView
-        val rootView = currentView?.rootView
+        val view = parentView
+        val rootView = parentView?.rootView
         val recorder = imageReader
         if (view != null) {
             val index = view.indexOfChild(this)
@@ -250,7 +252,10 @@ constructor(
                 view.removeView(this)
                 view.addView(this, 0)
             }
-            if (rootView != null && recorder != null && checkDirty(view)) {
+            if (rootView != null && recorder != null && checkDirty(
+                    view
+                )
+            ) {
                 getGlobalVisibleRect(visibleRect)
                 val width = visibleRect.width()
                 val height = visibleRect.height()
@@ -370,7 +375,9 @@ constructor(
                     PixelFormat.RGBA_8888,
                     30
                 )
-                r.setOnImageAvailableListener(this, worker)
+                r.setOnImageAvailableListener(this,
+                    worker
+                )
                 imageReader = r
             }
         } else {
@@ -400,7 +407,8 @@ constructor(
                     }
                 val context = mInitialApplicationField.get(sCurrentActivityThread) as Application
                 val innerPool = Glide.get(context).bitmapPool
-                return@lazy object : BitmapPoolAdapter {
+                return@lazy object :
+                    BitmapPoolAdapter {
                     override fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap {
                         return innerPool.get(width, height, config)
                     }
@@ -411,7 +419,8 @@ constructor(
                 }
             } catch (e: Throwable) {
                 e.printStackTrace()
-                return@lazy object : BitmapPoolAdapter {
+                return@lazy object :
+                    BitmapPoolAdapter {
                     override fun get(width: Int, height: Int, config: Bitmap.Config): Bitmap {
                         return Bitmap.createBitmap(width, height, config)
                     }
@@ -460,7 +469,10 @@ constructor(
                 /* In API level 23 or below,  it will throw "java.lang.RuntimeException:
            ImageReaderContext is not initialized" when ImageReader is closed. To make the
            behavior consistent as newer API levels,  we make it return null Image instead.*/
-                if (!isImageReaderContextNotInitializedException(e)) {
+                if (!isImageReaderContextNotInitializedException(
+                        e
+                    )
+                ) {
                     throw e // only catch RuntimeException:ImageReaderContext is not initialized
                 }
             }
