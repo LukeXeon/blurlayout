@@ -20,10 +20,26 @@
                 android:layout_height="500dp"/>
         </FrameLayout>
     </ScrollView>
-    <com.luke.blurlayout.BlurLayout
-        app:cornerRadius="20dp"
-        android:layout_gravity="bottom"
+    <LinearLayout
+        android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
-    </com.luke.blurlayout.BlurLayout>
+        <com.luke.blurlayout.BlurLayout
+            app:cornerRadius="20dp"
+            android:layout_weight="1"
+            android:layout_gravity="bottom"
+            android:layout_width="match_parent"
+            android:layout_height="0dp">
+        </com.luke.blurlayout.BlurLayout>
+        <Space
+            android:layout_width="match_parent"
+            android:layout_height="400dp"/>
+        <com.luke.blurlayout.BlurLayout
+            app:cornerRadius="20dp"
+            android:layout_weight="1"
+            android:layout_gravity="bottom"
+            android:layout_width="match_parent"
+            android:layout_height="0dp">
+        </com.luke.blurlayout.BlurLayout>
+    </LinearLayout>
 </FrameLayout>
