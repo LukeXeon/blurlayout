@@ -4,4 +4,5 @@
         <attr name="blurSampling" format="float" />
         <attr name="blurRadius" format="float" />
     </declare-styleable>
+    <item name="attach_view_set" type="id"/>
 </resources>

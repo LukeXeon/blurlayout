@@ -22,6 +22,7 @@ import androidx.annotation.Px
 import androidx.annotation.RequiresApi
 import com.bumptech.glide.Glide
 import open.source.uikit.R
+import java.util.*
 import kotlin.math.max
 import kotlin.math.min
 
@@ -34,6 +35,8 @@ constructor(
 ) : View(context, attrs, defStyleAttr),
     ViewTreeObserver.OnPreDrawListener,
     ImageReader.OnImageAvailableListener {
+    private var workerThread: HandlerThread? = null
+    private var worker: Handler? = null
     private var renderScript: RenderScript? = null
     private var blur: ScriptIntrinsicBlur? = null
     private var imageReader: ImageReader? = null
@@ -43,7 +46,21 @@ constructor(
     private val visibleRect = Rect()
     private val tempOptions = BitmapFactory.Options()
     private val parentView: ViewGroup?
-        get() = this.parent as? ViewGroup
+        get() = parent as? ViewGroup
+    private var attachViewSet: MutableSet<BlurView>?
+        get() {
+            if (isAttachedToWindow) {
+                @Suppress("UNCHECKED_CAST")
+                return rootView.getTag(R.id.attach_view_set) as? MutableSet<BlurView>
+            } else {
+                return null
+            }
+        }
+        set(value) {
+            if (isAttachedToWindow) {
+                rootView.setTag(R.id.attach_view_set, value)
+            }
+        }
     private var skipDrawing: Boolean = false
         set(value) {
             field = value
@@ -205,6 +222,16 @@ constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        workerThread = HandlerThread(
+            toString(),
+            Process.THREAD_PRIORITY_FOREGROUND
+        ).apply { start() }
+        var set = attachViewSet
+        if (set == null) {
+            set = requireNotNull(Collections.newSetFromMap(WeakHashMap<BlurView, Boolean>()))
+            attachViewSet = set
+        }
+        set.add(this)
         viewTreeObserver.addOnPreDrawListener(this)
         val rs = RenderScript.create(context)
         val rsb = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
@@ -215,6 +242,16 @@ constructor(
     }
 
     override fun onDetachedFromWindow() {
+        workerThread?.quit()
+        workerThread = null
+        worker = null
+        val set = attachViewSet
+        if (set != null) {
+            set.remove(this)
+            if (set.isEmpty()) {
+                attachViewSet = null
+            }
+        }
         synchronized(frameLock) {
             val frame = this.frame
             if (frame != null) {
@@ -244,7 +281,8 @@ constructor(
         val view = parentView
         val rootView = parentView?.rootView
         val recorder = imageReader
-        if (view != null) {
+        val attachSet = attachViewSet
+        if (view != null && !attachSet.isNullOrEmpty()) {
             val index = view.indexOfChild(this)
             if (index == -1) {
                 view.addView(this, 0)
@@ -252,10 +290,7 @@ constructor(
                 view.removeView(this)
                 view.addView(this, 0)
             }
-            if (rootView != null && recorder != null && checkDirty(
-                    view
-                )
-            ) {
+            if (rootView != null && recorder != null && checkDirty(view)) {
                 getGlobalVisibleRect(visibleRect)
                 val width = visibleRect.width()
                 val height = visibleRect.height()
@@ -276,10 +311,14 @@ constructor(
                     )
                     // 防止画到自己
                     try {
-                        skipDrawing = true
+                        attachSet.forEach {
+                            it.skipDrawing = true
+                        }
                         rootView.draw(canvas)
                     } finally {
-                        skipDrawing = false
+                        attachSet.forEach {
+                            it.skipDrawing = false
+                        }
                     }
                     // 结束录制
                     surface.unlockCanvasAndPost(canvas)
@@ -361,9 +400,15 @@ constructor(
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        val recorder = imageReader
-        val blurSampling = blurSampling
         if (w * h > 0) {
+            val thread = workerThread ?: return
+            val recorder = imageReader
+            var handler = worker
+            if (handler == null) {
+                handler = Handler(thread.looper)
+                worker = handler
+            }
+            val blurSampling = blurSampling
             if (recorder == null || recorder.width != w && recorder.height != h) {
                 val scaledWidth = (w / blurSampling).toInt()
                 val scaledHeight = (h / blurSampling).toInt()
@@ -375,8 +420,9 @@ constructor(
                     PixelFormat.RGBA_8888,
                     30
                 )
-                r.setOnImageAvailableListener(this,
-                    worker
+                r.setOnImageAvailableListener(
+                    this,
+                    handler
                 )
                 imageReader = r
             }
@@ -430,17 +476,6 @@ constructor(
                     }
                 }
             }
-        }
-
-        private val workerThread by lazy {
-            HandlerThread(
-                toString(),
-                Process.THREAD_PRIORITY_FOREGROUND
-            ).apply { start() }
-        }
-
-        private val worker by lazy {
-            Handler(workerThread.looper)
         }
 
         private inline fun <R> Allocation.use(block: (Allocation) -> R): R {
