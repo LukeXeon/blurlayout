@@ -42,6 +42,8 @@ constructor(
     private var blur: ScriptIntrinsicBlur? = null
     private var imageReader: ImageReader? = null
     private val processLock = Any()
+    private val tempCanvas = Canvas()
+    private val tempSrcRect = Rect()
     private val tempVisibleRect = Rect()
     private val tempLayoutParams = ViewGroup.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -240,7 +242,6 @@ constructor(
                 }
                 canvas.clipPath(path)
             }
-
             val scaledWidth = (width / blurSampling).toInt()
             val scaledHeight = (height / blurSampling).toInt()
             // 经过渲染的Bitmap由于缩放的关系
@@ -363,12 +364,28 @@ constructor(
             bitmap.copyPixelsFromBuffer(bytes)
             return@use bitmap
         }
+        val clipBitmap = bitmapPool[
+                scaledWidth,
+                scaledHeight,
+                Bitmap.Config.ARGB_8888
+        ]
+        tempCanvas.setBitmap(clipBitmap)
+        tempCanvas.drawBitmap(
+            bitmap,
+            tempSrcRect.apply {
+                set(0, 0, scaledWidth, scaledHeight)
+            },
+            tempSrcRect,
+            null
+        )
+        tempCanvas.setBitmap(null)
+        bitmapPool.recycle(bitmap)
         val bitmapTime = SystemClock.uptimeMillis()
         Log.d(TAG, "bitmap=${bitmapTime - startTime}")
         synchronized(processLock) {
             val blur = this.blur ?: return
             val input = Allocation.createFromBitmap(
-                renderScript, bitmap, Allocation.MipmapControl.MIPMAP_NONE,
+                renderScript, clipBitmap, Allocation.MipmapControl.MIPMAP_NONE,
                 Allocation.USAGE_SCRIPT
             )
             AutoCloseable { input.destroy() }.use {
@@ -377,14 +394,14 @@ constructor(
                     blur.setInput(input)
                     blur.setRadius(blurRadius)
                     blur.forEach(output)
-                    output.copyTo(bitmap)
+                    output.copyTo(clipBitmap)
                 }
             }
         }
         val blurTime = SystemClock.uptimeMillis()
         Log.d(TAG, "blur=${blurTime - bitmapTime}")
-        bitmap.prepareToDraw()
-        background.updateFrame(bitmap)
+        clipBitmap.prepareToDraw()
+        background.updateFrame(clipBitmap)
         val drawTime = SystemClock.uptimeMillis()
         Log.d(TAG, "draw=${drawTime - blurTime}")
     }
