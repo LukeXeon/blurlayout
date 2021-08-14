@@ -42,8 +42,8 @@ constructor(
     private val clipBitmapRect = Rect()
     private val visibleRect = Rect()
     private val tempOptions = BitmapFactory.Options()
-    private val currentView: FrameLayout?
-        get() = this.parent as? FrameLayout
+    private val currentView: ViewGroup?
+        get() = this.parent as? ViewGroup
     private var skipDrawing: Boolean = false
         set(value) {
             field = value
