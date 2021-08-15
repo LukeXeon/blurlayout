@@ -39,7 +39,6 @@ class BlurLayout @JvmOverloads constructor(
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
     private val backgroundView = BackgroundView(context)
-    private var skipDirty: Boolean = true
 
     var cornerRadius: Float
         get() = backgroundView.cornerRadius
@@ -109,7 +108,6 @@ class BlurLayout @JvmOverloads constructor(
             set(value) {
                 rootView.setTag(R.id.root_attach_info, value)
             }
-        var inInvalidate: Boolean = false
 
         @Volatile
         private var pendingFrame: Bitmap? = null
@@ -521,18 +519,6 @@ class BlurLayout @JvmOverloads constructor(
             super.onDetachedFromWindow()
         }
 
-        override fun invalidate() {
-            inInvalidate = true
-            super.invalidate()
-            inInvalidate = false
-        }
-
-        override fun setVisibility(visibility: Int) {
-            inInvalidate = true
-            super.setVisibility(if (visibility == VISIBLE) VISIBLE else GONE)
-            inInvalidate = false
-        }
-
         override fun onPreDraw(): Boolean {
             val start = SystemClock.uptimeMillis()
             val parentView = parentView
@@ -542,7 +528,7 @@ class BlurLayout @JvmOverloads constructor(
             if (parentView != null && !attachSet.isNullOrEmpty()) {
                 if (rootView != null
                     && recorder != null
-                    && checkDirty(rootView) == DirtyType.Dirty
+                    && checkDirty(rootView) == DirtyPath.Dirty
                 ) {
                     getGlobalVisibleRect(visibleRect)
                     val width = visibleRect.width()
@@ -583,50 +569,48 @@ class BlurLayout @JvmOverloads constructor(
 
     }
 
+
     companion object {
 
-        private enum class DirtyType {
+        private enum class DirtyPath {
             None,
-            Dirty,
-            Skip
+            Skip,
+            Dirty
         }
 
         private val bitmapPool: BitmapPool
             get() = BitmapPool.default
 
-        private fun checkDirty(view: View): DirtyType {
+        private fun checkDirty(view: View): DirtyPath {
             if (view.isDirty) {
                 when (view) {
-                    is BlurLayout -> {
-                        return if (view.skipDirty) {
-                            DirtyType.Skip
-                        } else {
-                            DirtyType.Dirty
-                        }
+                    is BackgroundView -> {
+                        return DirtyPath.Skip
                     }
                     is ViewGroup -> {
-                        var skip = false
+                        var hasSkipPath = false
+                        var dirtyCount = 0
                         for (i in 0 until view.childCount) {
                             val child = view.getChildAt(i)
-                            val type = checkDirty(child)
-                            if (type == DirtyType.Dirty) {
-                                return DirtyType.Dirty
-                            } else if (type == DirtyType.Skip) {
-                                skip = true
+                            val childPath = checkDirty(child)
+                            if (childPath == DirtyPath.Dirty) {
+                                dirtyCount += 1
+                            } else if (childPath == DirtyPath.Skip) {
+                                hasSkipPath = true
                             }
                         }
-                        return if (skip) {
-                            DirtyType.Skip
-                        } else {
-                            DirtyType.Dirty
+                        if (hasSkipPath && dirtyCount == 0) {
+                            return DirtyPath.Skip
                         }
+                        return DirtyPath.Dirty
                     }
                     else -> {
-                        return DirtyType.Dirty
+                        return DirtyPath.Dirty
                     }
                 }
+            } else {
+                return DirtyPath.None
             }
-            return DirtyType.None
         }
 
         private const val TAG = "BlurLayout"
