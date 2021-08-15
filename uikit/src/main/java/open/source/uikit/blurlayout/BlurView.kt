@@ -91,6 +91,8 @@ constructor(
             field = max(0f, value)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 invalidateOutline()
+            } else {
+                invalidate()
             }
         }
 
