@@ -20,10 +20,7 @@ import androidx.annotation.Px
 import androidx.annotation.RequiresApi
 import androidx.annotation.WorkerThread
 import open.source.uikit.R
-import open.source.uikit.common.BitmapPool
-import open.source.uikit.common.acquireLatestImageCompat
-import open.source.uikit.common.createAsync
-import open.source.uikit.common.use
+import open.source.uikit.common.*
 import java.io.Closeable
 import java.util.*
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -259,27 +256,32 @@ constructor(
         private var current: Picture? = null
 
         override fun run() {
-            var picture: Picture? = null
+            var latest: Picture? = null
             while (true) {
                 val next = completeQueue.poll()
                 if (next == null) {
                     break
                 } else {
-                    if (picture != null && freeQueue.size < 30) {
-                        freeQueue.add(picture)
+                    if (latest != null && freeQueue.size < 30) {
+                        Log.d(TAG, "recycle picture size=" + freeQueue.size)
+                        freeQueue.add(latest)
                     }
-                    picture = next
+                    latest = next
                 }
             }
-            picture ?: return
+            latest ?: return
             val bitmap = bitmapPool[
-                    picture.width,
-                    picture.height,
+                    latest.width,
+                    latest.height,
                     Bitmap.Config.ARGB_8888
             ]
             tempCanvas.setBitmap(bitmap)
-            tempCanvas.drawPicture(picture)
+            tempCanvas.drawPicture(latest)
             tempCanvas.setBitmap(null)
+            if (freeQueue.size < 30) {
+                Log.d(TAG, "recycle picture size=" + freeQueue.size)
+                freeQueue.add(latest)
+            }
             callback(bitmap)
         }
 
@@ -289,7 +291,9 @@ constructor(
         }
 
         override fun lockCanvas(): Canvas {
-            val picture = freeQueue.poll() ?: Picture()
+            val picture = freeQueue.poll() ?: Picture().apply {
+                Log.d(TAG, "create picture")
+            }
             val canvas = picture.beginRecording(size[0], size[1])
             current = picture
             return canvas
@@ -472,19 +476,19 @@ constructor(
 
     override fun onPreDraw(): Boolean {
         val start = SystemClock.uptimeMillis()
-        val view = parentView
-        val rootView = parentView?.rootView
+        val parentView = parentView
+        val rootView = this.parentView?.rootView
         val recorder = recorder
         val attachSet = attachViewSet
-        if (view != null && !attachSet.isNullOrEmpty()) {
-            val index = view.indexOfChild(this)
+        if (parentView != null && !attachSet.isNullOrEmpty()) {
+            val index = parentView.indexOfChild(this)
             if (index == -1) {
-                view.addView(this, 0)
+                parentView.addView(this, 0)
             } else if (index != 0) {
-                view.removeView(this)
-                view.addView(this, 0)
+                parentView.removeView(this)
+                parentView.addView(this, 0)
             }
-            if (rootView != null && recorder != null && checkDirty(view)) {
+            if (rootView != null && recorder != null && checkDirty(this)) {
                 getGlobalVisibleRect(visibleRect)
                 val width = visibleRect.width()
                 val height = visibleRect.height()
@@ -530,22 +534,25 @@ constructor(
             get() = BitmapPool.default
 
         private fun checkDirty(view: View): Boolean {
+            // 如果不是自己脏了，就绘制一帧
             if (!view.isDirty) {
                 return true
             }
-            var c: View? = view
-            var p: ViewGroup? = view.parent as? ViewGroup
-            while (p != null) {
-                for (index in 0 until p.childCount) {
-                    val v = p.getChildAt(index)
-                    if (v != c && v.isDirty) {
+            var current: View? = view
+            var parent: ViewGroup? = view.parent as? ViewGroup
+            while (parent != null) {
+                for (index in 0 until parent.childCount) {
+                    val v = parent.getChildAt(index)
+                    if (v != current && v.isDirty) {
                         return true
                     }
                 }
-                c = p
-                p = p.parent as? ViewGroup
+                current = parent
+                parent = parent.parent as? ViewGroup
             }
             return false
         }
+
+
     }
 }
