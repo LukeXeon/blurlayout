@@ -26,6 +26,7 @@
         android:layout_height="300dp">
     </open.source.uikit.blurlayout.BlurLayout>
     <open.source.uikit.blurlayout.BlurLayout
+        android:id="@+id/id2"
         app:cornerRadius="20dp"
         android:layout_gravity="right"
         android:layout_width="100dp"
