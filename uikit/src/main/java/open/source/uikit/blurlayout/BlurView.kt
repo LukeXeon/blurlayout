@@ -127,17 +127,15 @@ class BlurView @JvmOverloads constructor(
 
         override fun onPreDraw(): Boolean {
             val start = SystemClock.uptimeMillis()
-            if (set.isNotEmpty()) {
-                if (checkDirty(set.first().rootView) == DirtyPath.Dirty) {
-                    set.forEach {
-                        it.visibility = GONE
-                    }
-                    set.forEach {
-                        it.requestFrame()
-                    }
-                    set.forEach {
-                        it.visibility = VISIBLE
-                    }
+            if (set.isNotEmpty() && checkDirty(set.first().rootView) == DirtyPath.Dirty) {
+                set.forEach {
+                    it.visibility = GONE
+                }
+                set.forEach {
+                    it.requestFrame()
+                }
+                set.forEach {
+                    it.visibility = VISIBLE
                 }
             }
             Log.d(
