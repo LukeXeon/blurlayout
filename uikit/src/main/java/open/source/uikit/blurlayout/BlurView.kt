@@ -133,7 +133,7 @@ class BlurView @JvmOverloads constructor(
                         it.visibility = GONE
                     }
                     set.forEach {
-                        it.performPreDraw()
+                        it.requestFrame()
                     }
                     set.forEach {
                         it.visibility = VISIBLE
@@ -157,7 +157,7 @@ class BlurView @JvmOverloads constructor(
         }
     }
 
-    private abstract class Recorder(protected val callback: (Bitmap) -> Unit) : Closeable {
+    private abstract class Recorder : Closeable {
 
         private val workerThread = HandlerThread(
             super.toString(),
@@ -182,7 +182,7 @@ class BlurView @JvmOverloads constructor(
     }
 
     @RequiresApi(Build.VERSION_CODES.KITKAT)
-    private inner class ImageReaderRecorder(callback: (Bitmap) -> Unit) : Recorder(callback),
+    private inner class ImageReaderRecorder : Recorder(),
         ImageReader.OnImageAvailableListener {
         private val clipBitmapCanvas = Canvas()
         private val clipBitmapRect = Rect()
@@ -225,7 +225,7 @@ class BlurView @JvmOverloads constructor(
             bitmapPool.recycle(bitmap)
             val bitmapTime = SystemClock.uptimeMillis()
             Log.d(TAG, "bitmap=${bitmapTime - startTime}")
-            callback(clipBitmap)
+            onFrameAvailable(clipBitmap)
         }
 
         override fun onSizeChanged(width: Int, height: Int) {
@@ -275,7 +275,7 @@ class BlurView @JvmOverloads constructor(
         }
     }
 
-    private inner class PictureRecorder(callback: (Bitmap) -> Unit) : Recorder(callback),
+    private inner class PictureRecorder : Recorder(),
         Runnable {
         private val size = IntArray(2)
         private val tempCanvas = Canvas()
@@ -315,7 +315,7 @@ class BlurView @JvmOverloads constructor(
                 Log.d(TAG, "recycle picture size=" + freeQueue.size)
                 freeQueue.add(latest)
             }
-            callback(bitmap)
+            onFrameAvailable(bitmap)
         }
 
         override fun onSizeChanged(width: Int, height: Int) {
@@ -479,9 +479,9 @@ class BlurView @JvmOverloads constructor(
             blur = rsb
         }
         recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            ImageReaderRecorder(this::onFrameAvailable)
+            ImageReaderRecorder()
         } else {
-            PictureRecorder(this::onFrameAvailable)
+            PictureRecorder()
         }
     }
 
@@ -517,7 +517,7 @@ class BlurView @JvmOverloads constructor(
         super.onDetachedFromWindow()
     }
 
-    private fun performPreDraw() {
+    private fun requestFrame() {
         val recorder = recorder ?: return
         getGlobalVisibleRect(visibleRect)
         val width = visibleRect.width()
