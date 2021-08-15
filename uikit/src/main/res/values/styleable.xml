@@ -1,5 +1,5 @@
 <resources>
-    <declare-styleable name="BlurView">
+    <declare-styleable name="BlurLayout">
         <attr name="cornerRadius" format="dimension" />
         <attr name="blurSampling" format="float" />
         <attr name="blurRadius" format="float" />
