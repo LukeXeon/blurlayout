@@ -39,7 +39,7 @@ class BlurLayout @JvmOverloads constructor(
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
     private val backgroundView = BackgroundView(context)
-    private var isBackgroundDirty: Boolean = true
+    private var skipDirty: Boolean = true
 
     var cornerRadius: Float
         get() = backgroundView.cornerRadius
@@ -73,11 +73,6 @@ class BlurLayout @JvmOverloads constructor(
         isChildrenDrawingOrderEnabled = true
     }
 
-    override fun draw(canvas: Canvas?) {
-        super.draw(canvas)
-        isBackgroundDirty = false
-    }
-
     override fun getChildDrawingOrder(childCount: Int, drawingPosition: Int): Int {
         val index = indexOfChild(backgroundView)
         return if (index == 0) {
@@ -97,11 +92,6 @@ class BlurLayout @JvmOverloads constructor(
         }
     }
 
-    override fun onDescendantInvalidated(child: View, target: View) {
-        super.onDescendantInvalidated(child, target)
-        isBackgroundDirty = true
-    }
-
     private class BackgroundView(context: Context) : View(context),
         ViewTreeObserver.OnPreDrawListener {
         private var renderScript: RenderScript? = null
@@ -119,6 +109,7 @@ class BlurLayout @JvmOverloads constructor(
             set(value) {
                 rootView.setTag(R.id.root_attach_info, value)
             }
+        var inInvalidate: Boolean = false
 
         @Volatile
         private var pendingFrame: Bitmap? = null
@@ -530,6 +521,18 @@ class BlurLayout @JvmOverloads constructor(
             super.onDetachedFromWindow()
         }
 
+        override fun invalidate() {
+            inInvalidate = true
+            super.invalidate()
+            inInvalidate = false
+        }
+
+        override fun setVisibility(visibility: Int) {
+            inInvalidate = true
+            super.setVisibility(if (visibility == VISIBLE) VISIBLE else GONE)
+            inInvalidate = false
+        }
+
         override fun onPreDraw(): Boolean {
             val start = SystemClock.uptimeMillis()
             val parentView = parentView
@@ -539,7 +542,7 @@ class BlurLayout @JvmOverloads constructor(
             if (parentView != null && !attachSet.isNullOrEmpty()) {
                 if (rootView != null
                     && recorder != null
-                    && checkDirty(rootView, parentView) == DirtyType.Dirty
+                    && checkDirty(rootView) == DirtyType.Dirty
                 ) {
                     getGlobalVisibleRect(visibleRect)
                     val width = visibleRect.width()
@@ -591,11 +594,11 @@ class BlurLayout @JvmOverloads constructor(
         private val bitmapPool: BitmapPool
             get() = BitmapPool.default
 
-        private fun checkDirty(view: View, self: BlurLayout): DirtyType {
+        private fun checkDirty(view: View): DirtyType {
             if (view.isDirty) {
                 when (view) {
                     is BlurLayout -> {
-                        return if (view.isBackgroundDirty) {
+                        return if (view.skipDirty) {
                             DirtyType.Skip
                         } else {
                             DirtyType.Dirty
@@ -605,7 +608,7 @@ class BlurLayout @JvmOverloads constructor(
                         var skip = false
                         for (i in 0 until view.childCount) {
                             val child = view.getChildAt(i)
-                            val type = checkDirty(child, self)
+                            val type = checkDirty(child)
                             if (type == DirtyType.Dirty) {
                                 return DirtyType.Dirty
                             } else if (type == DirtyType.Skip) {
