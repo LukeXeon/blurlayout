@@ -53,7 +53,7 @@ fun createAsync(looper: Looper): Handler {
     } catch (ignored: NoSuchMethodException) {
     } catch (e: InvocationTargetException) {
         val cause = e.cause
-        if (cause is java.lang.RuntimeException) {
+        if (cause is RuntimeException) {
             throw cause
         }
         if (cause is Error) {
