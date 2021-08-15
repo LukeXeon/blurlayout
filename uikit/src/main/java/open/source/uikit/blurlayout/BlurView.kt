@@ -27,6 +27,7 @@ import open.source.uikit.common.use
 import java.io.Closeable
 import java.util.*
 import java.util.concurrent.ConcurrentLinkedQueue
+import kotlin.collections.HashSet
 import kotlin.math.max
 import kotlin.math.min
 
@@ -122,8 +123,7 @@ class BlurView @JvmOverloads constructor(
 
     private class RootAttachInfo :
         ViewTreeObserver.OnPreDrawListener {
-        val set: MutableSet<BlurView> =
-            Collections.newSetFromMap(WeakHashMap<BlurView, Boolean>())
+        val set = HashSet<BlurView>()
 
         override fun onPreDraw(): Boolean {
             val start = SystemClock.uptimeMillis()
