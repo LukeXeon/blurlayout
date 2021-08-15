@@ -137,15 +137,11 @@ constructor(
 
     private abstract class Recorder(protected val callback: (Bitmap) -> Unit) : Closeable {
 
-        protected var workerThread: HandlerThread? = null
-        protected var worker: Handler? = null
-
-        init {
-            workerThread = HandlerThread(
-                TAG + Recorder::class.java.simpleName,
-                Process.THREAD_PRIORITY_FOREGROUND
-            ).apply { start() }
-        }
+        private val workerThread = HandlerThread(
+            super.toString(),
+            Process.THREAD_PRIORITY_FOREGROUND
+        ).apply { start() }
+        protected val worker: Handler by lazy { createAsync(workerThread.looper) }
 
         abstract fun onSizeChanged(width: Int, height: Int)
 
@@ -154,9 +150,7 @@ constructor(
         abstract fun unlockCanvasAndPost(canvas: Canvas)
 
         override fun close() {
-            workerThread?.quit()
-            workerThread = null
-            worker = null
+            workerThread.quit()
         }
 
     }
@@ -210,13 +204,7 @@ constructor(
 
         override fun onSizeChanged(width: Int, height: Int) {
             if (width * height > 0) {
-                val thread = workerThread ?: return
                 val recorder = imageReader
-                var handler = worker
-                if (handler == null) {
-                    handler = Handler(thread.looper)
-                    worker = handler
-                }
                 val blurSampling = blurSampling
                 if (recorder == null || recorder.width != width && recorder.height != height) {
                     val scaledWidth = (width / blurSampling).toInt()
@@ -231,7 +219,7 @@ constructor(
                     )
                     r.setOnImageAvailableListener(
                         this,
-                        handler
+                        worker
                     )
                     imageReader = r
                 }
@@ -310,16 +298,8 @@ constructor(
             picture.endRecording()
             current = null
             completeQueue.add(picture)
-            val thread = workerThread
-            if (thread != null) {
-                var worker = worker
-                if (worker == null) {
-                    worker = createAsync(thread.looper)
-                    this.worker = worker
-                }
-                if (!worker.hasMessages(0, this)) {
-                    worker.postAtTime(this, this, SystemClock.uptimeMillis())
-                }
+            if (!worker.hasMessages(0, this)) {
+                worker.postAtTime(this, this, SystemClock.uptimeMillis())
             }
         }
 
