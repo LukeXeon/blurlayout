@@ -43,13 +43,12 @@ constructor(
     private val tempOptions = BitmapFactory.Options()
     private val parentView: ViewGroup?
         get() = parent as? ViewGroup
-    private var attachViewSet: MutableSet<BlurView>?
+    private var attachInfo: RootAttachInfo?
         get() {
-            @Suppress("UNCHECKED_CAST")
-            return rootView.getTag(R.id.attach_view_set) as? MutableSet<BlurView>
+            return rootView.getTag(R.id.root_attach_info) as? RootAttachInfo
         }
         set(value) {
-            rootView.setTag(R.id.attach_view_set, value)
+            rootView.setTag(R.id.root_attach_info, value)
         }
     private var skipDrawing: Boolean = false
         set(value) {
@@ -62,6 +61,8 @@ constructor(
 
     @Volatile
     private var frame: Bitmap? = null
+
+    private var isLatestFrame: Boolean = false
 
     private val nextFrameLock = Any()
     private val drawingRect = Rect()
@@ -78,6 +79,7 @@ constructor(
             this.pendingFrame = null
         }
         this.frame = newValue
+        isLatestFrame = false
         invalidate()
     }
 
@@ -123,6 +125,10 @@ constructor(
             clipToOutline = true
         }
         setLayerType(LAYER_TYPE_HARDWARE, null)
+    }
+
+    private class RootAttachInfo {
+        val set: MutableSet<BlurView> = Collections.newSetFromMap(WeakHashMap<BlurView, Boolean>())
     }
 
     @RequiresApi(Build.VERSION_CODES.LOLLIPOP)
@@ -368,6 +374,7 @@ constructor(
     }
 
     override fun onDraw(canvas: Canvas) {
+        isLatestFrame = true
         val frame = this.frame
         val cornerRadius = this.cornerRadius
         val skipDrawing = this.skipDrawing
@@ -422,12 +429,12 @@ constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        var set = attachViewSet
-        if (set == null) {
-            set = requireNotNull(Collections.newSetFromMap(WeakHashMap<BlurView, Boolean>()))
-            attachViewSet = set
+        var info = attachInfo
+        if (info == null) {
+            info = RootAttachInfo()
+            attachInfo = info
         }
-        set.add(this)
+        info.set.add(this)
         viewTreeObserver.addOnPreDrawListener(this)
         val rs = RenderScript.create(context)
         val rsb = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs))
@@ -443,11 +450,11 @@ constructor(
     }
 
     override fun onDetachedFromWindow() {
-        val set = attachViewSet
-        if (set != null) {
-            set.remove(this)
-            if (set.isEmpty()) {
-                attachViewSet = null
+        val info = attachInfo
+        if (info != null) {
+            info.set.remove(this)
+            if (info.set.isEmpty()) {
+                attachInfo = null
             }
         }
         val frame = this.frame
@@ -479,7 +486,7 @@ constructor(
         val parentView = parentView
         val rootView = this.parentView?.rootView
         val recorder = recorder
-        val attachSet = attachViewSet
+        val attachSet = attachInfo?.set
         if (parentView != null && !attachSet.isNullOrEmpty()) {
             val index = parentView.indexOfChild(this)
             if (index == -1) {
@@ -488,7 +495,10 @@ constructor(
                 parentView.removeView(this)
                 parentView.addView(this, 0)
             }
-            if (rootView != null && recorder != null && checkDirty(this)) {
+            if (rootView != null
+                && recorder != null
+                && checkDirty(this)
+            ) {
                 getGlobalVisibleRect(visibleRect)
                 val width = visibleRect.width()
                 val height = visibleRect.height()
