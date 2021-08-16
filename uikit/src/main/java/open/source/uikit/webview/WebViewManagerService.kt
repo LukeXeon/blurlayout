@@ -1,5 +1,6 @@
 package open.source.uikit.webview
 
+import android.annotation.SuppressLint
 import android.app.Service
 import android.content.Intent
 import android.os.Handler
@@ -10,13 +11,16 @@ import android.view.Surface
 import android.webkit.WebView
 import android.widget.PopupWindow
 import androidx.annotation.MainThread
+import open.source.uikit.ipc.DynamicInvokeHandler
 import java.util.concurrent.FutureTask
+import java.lang.reflect.Proxy.newProxyInstance
 
 class WebViewManagerService : Service() {
 
     private class Session(
         private val window: PopupWindow
     ) : IWebViewSession.Stub() {
+        private val webView: WebView = TODO()
         private var surface: Surface? = null
 
         override fun setSurface(surface: Surface?) {
@@ -24,6 +28,29 @@ class WebViewManagerService : Service() {
                 this.surface = surface
             }
         }
+
+        override fun zoomOut(): Boolean {
+            return blockOnMainThread { webView.zoomOut() }
+        }
+
+        override fun zoomIn(): Boolean {
+            return blockOnMainThread { webView.zoomOut() }
+        }
+
+        override fun getUrl(): String {
+            return blockOnMainThread { webView.url }
+        }
+
+        @SuppressLint("JavascriptInterface")
+        override fun addJavascriptInterface(
+            obj: DynamicInvokeHandler,
+            interfaceName: String
+        ) {
+            blockOnMainThread {
+                webView.addJavascriptInterface(obj, interfaceName)
+            }
+        }
+
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -53,13 +80,9 @@ class WebViewManagerService : Service() {
         private val mainThread = Handler(Looper.getMainLooper())
 
         private fun <T> blockOnMainThread(action: () -> T): T {
-            return if (Looper.myLooper() == mainThread.looper) {
-                action()
-            } else {
-                val task = FutureTask<T>(action)
-                mainThread.post(task)
-                task.get()
-            }
+            val task = FutureTask<T>(action)
+            mainThread.post(task)
+            return task.get()
         }
 
         private fun PopupWindow.showAtLocation(
