@@ -26,7 +26,7 @@ class MainActivity : AppCompatActivity() {
         bindService(Intent(this, WebViewManagerService::class.java), object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
                 IWebViewManagerService.Stub.asInterface(service)
-                    .createSession(findViewById<View>(R.id.root).applicationWindowToken, null)
+                    .openSession(findViewById<View>(R.id.root).applicationWindowToken, null)
             }
 
             override fun onServiceDisconnected(name: ComponentName?) {
