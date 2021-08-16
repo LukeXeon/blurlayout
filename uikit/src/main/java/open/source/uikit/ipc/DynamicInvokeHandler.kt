@@ -22,17 +22,17 @@ class DynamicInvokeHandler(
             DynamicInvokeHandler::class.java.classLoader,
             classes,
             object : InvocationHandler {
-                override fun invoke(proxy: Any?, method: Method, args: Array<out Any?>): Any {
+                override fun invoke(proxy: Any?, method: Method, args: Array<out Any?>): Any? {
                     return if (method.declaringClass == Any::class.java) {
                         method.invoke(this, args)
                     } else {
-                        obj.dynamicInvoke(
+                        unpack(obj.dynamicInvoke(
                             method.name,
                             method.parameterTypes.map {
                                 it.name
                             }.toTypedArray(),
                             args.toPackArray()
-                        )
+                        ))
                     }
                 }
             }
@@ -41,10 +41,10 @@ class DynamicInvokeHandler(
 
     override fun writeToParcel(parcel: Parcel, flags: Int) {
         parcel.writeStringArray(findProxyInterfaces(target.javaClass))
-        parcel.writeStrongBinder(getRemote())
+        parcel.writeStrongBinder(getDynamicInvoke())
     }
 
-    private fun getRemote(): IBinder {
+    private fun getDynamicInvoke(): IBinder {
         return synchronized(stubCache) {
             stubCache.getOrPut(target) {
                 object : IDynamicInvoke.Stub() {
