@@ -3,6 +3,7 @@ package open.source.uikit.ipc
 import android.os.IBinder
 import android.os.Parcel
 import android.os.Parcelable
+import java.io.Serializable
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -26,13 +27,15 @@ class DynamicInvokeHandler(
                     return if (method.declaringClass == Any::class.java) {
                         method.invoke(this, args)
                     } else {
-                        unpack(obj.dynamicInvoke(
-                            method.name,
-                            method.parameterTypes.map {
-                                it.name
-                            }.toTypedArray(),
-                            args.toPackArray()
-                        ))
+                        unpack(
+                            obj.dynamicInvoke(
+                                method.name,
+                                method.parameterTypes.map {
+                                    it.name
+                                }.toTypedArray(),
+                                args.toPackArray()
+                            )
+                        )
                     }
                 }
             }
@@ -149,6 +152,7 @@ class DynamicInvokeHandler(
                     is Byte -> ByteParcelable(any)
                     is String -> StringParcelable(any)
                     is IBinder -> BinderParcelable(any)
+                    is Serializable -> SerializeParcelable(any)
                     is Parcelable -> AnyParcelable(any)
                     else -> {
                         throw IllegalArgumentException()
@@ -169,6 +173,7 @@ class DynamicInvokeHandler(
                 is ByteParcelable -> any.value.value
                 is StringParcelable -> any.value.value
                 is BinderParcelable -> any.value.value
+                is SerializeParcelable -> any.value.value
                 is AnyParcelable -> any.value.value
                 else -> {
                     throw IllegalArgumentException()
