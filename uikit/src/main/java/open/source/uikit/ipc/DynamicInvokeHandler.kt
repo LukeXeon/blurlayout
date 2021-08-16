@@ -128,11 +128,11 @@ class DynamicInvokeHandler(
                     it.name to it
                 }.toMap()
 
-        fun Array<out AnyParcelable?>.toUnpackArray(): Array<out Any?> {
+        private fun Array<out AnyParcelable?>.toUnpackArray(): Array<out Any?> {
             return map { unpack(it) }.toTypedArray()
         }
 
-        fun Array<out Any?>.toPackArray(): Array<out AnyParcelable?> {
+        private fun Array<out Any?>.toPackArray(): Array<out AnyParcelable?> {
             return map { pack(it) }.toTypedArray()
         }
 
