@@ -199,7 +199,7 @@ class DynamicInvokeHandler(
             set.addAll(clazz.interfaces
                 .asSequence()
                 .filter {
-                    it.isAnnotationPresent(IPCInterface::class.java)
+                    it.isAnnotationPresent(DynamicInvokeInterface::class.java)
                 }.map {
                     it.name
                 }
