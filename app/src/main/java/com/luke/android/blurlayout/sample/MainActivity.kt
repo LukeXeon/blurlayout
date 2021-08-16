@@ -21,19 +21,6 @@ class MainActivity : AppCompatActivity() {
 
     }
 
-    override fun onResume() {
-        super.onResume()
-        bindService(Intent(this, WebViewManagerService::class.java), object : ServiceConnection {
-            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-                IWebViewManagerService.Stub.asInterface(service)
-                    .openSession(findViewById<View>(R.id.root).applicationWindowToken, null)
-            }
-
-            override fun onServiceDisconnected(name: ComponentName?) {
-
-            }
-        }, Context.BIND_AUTO_CREATE)
-    }
 
     companion object {
         private const val TAG = "MainActivity"
