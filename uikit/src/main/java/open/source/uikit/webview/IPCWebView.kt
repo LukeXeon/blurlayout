@@ -15,6 +15,7 @@ import android.view.View
 import android.webkit.DownloadListener
 import android.webkit.WebChromeClient
 import android.webkit.WebViewClient
+import open.source.uikit.ipc.DynamicInvokeHandler
 
 open class IPCWebView @JvmOverloads constructor(
     context: Context,
@@ -243,17 +244,19 @@ open class IPCWebView @JvmOverloads constructor(
 
     open fun setWebChromeClient(client: WebChromeClient?) {}
 
-    open fun addJavascriptInterface(obj: Any?, interfaceName: String?) {}
+    open fun addJavascriptInterface(obj: Any, interfaceName: String) {
+        session?.addJavascriptInterface(DynamicInvokeHandler(obj), interfaceName)
+    }
 
     open fun getZoomControls(): View? {
         return null
     }
 
     open fun zoomIn(): Boolean {
-        return false
+        return session?.zoomIn() ?: false
     }
 
     open fun zoomOut(): Boolean {
-        return false
+        return session?.zoomOut() ?: false
     }
 }
