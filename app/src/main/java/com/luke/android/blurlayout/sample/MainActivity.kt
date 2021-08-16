@@ -1,16 +1,15 @@
 package com.luke.android.blurlayout.sample
 
-import android.app.Activity
-import android.app.Application
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.os.Bundle
-import android.os.Handler
-import android.util.Log
+import android.os.IBinder
 import android.view.View
-import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
-import open.source.uikit.webview.NonBlockingWebService
+import open.source.uikit.webview.IWebViewManagerService
+import open.source.uikit.webview.WebViewManagerService
 
 class MainActivity : AppCompatActivity() {
 
@@ -24,7 +23,16 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        startService(Intent(this, NonBlockingWebService::class.java))
+        bindService(Intent(this, WebViewManagerService::class.java), object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                IWebViewManagerService.Stub.asInterface(service)
+                    .createSession(findViewById<View>(R.id.root).applicationWindowToken, null)
+            }
+
+            override fun onServiceDisconnected(name: ComponentName?) {
+
+            }
+        }, Context.BIND_AUTO_CREATE)
     }
 
     companion object {

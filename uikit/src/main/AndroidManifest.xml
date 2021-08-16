@@ -5,7 +5,6 @@
 
     <application>
         <service
-            android:name=".webview.NonBlockingWebService"
-            android:process=":web" />
+            android:name=".webview.WebViewManagerService" android:process=":web" />
     </application>
 </manifest>
