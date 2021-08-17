@@ -59,7 +59,7 @@ class ProxyParcelable(
                 target.javaClass.getMethod(
                     methodName,
                     *parameterTypes.map { primitiveTypes[it] ?: Class.forName(it) }.toTypedArray()
-                ).invoke(target, *args.map { pack(it) }.toTypedArray())
+                ).invoke(target, *args.map { unpack(it) }.toTypedArray())
             )
         }
     }
@@ -93,6 +93,8 @@ class ProxyParcelable(
                     it.name to it
                 }.toMap()
 
+        private val collect = HashSet<String>()
+
         private fun pack(any: Any?): AnyParcelable {
             return AnyParcelable(any)
         }
@@ -112,10 +114,14 @@ class ProxyParcelable(
         ): Array<String> {
             return synchronized(proxyInterfaces) {
                 proxyInterfaces.getOrPut(clazz) {
-                    findProxyInterfaces(
-                        clazz,
-                        HashSet()
-                    )
+                    try {
+                        findProxyInterfaces(
+                            clazz,
+                            collect
+                        )
+                    } finally {
+                        collect.clear()
+                    }
                 }
             }
         }
