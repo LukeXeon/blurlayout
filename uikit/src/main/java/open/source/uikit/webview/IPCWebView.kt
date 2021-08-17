@@ -15,7 +15,7 @@ import android.view.View
 import android.webkit.DownloadListener
 import android.webkit.WebChromeClient
 import android.webkit.WebViewClient
-import open.source.uikit.ipc.DynamicInvokeHandler
+import open.source.uikit.ipc.ProxyParcelable
 
 open class IPCWebView @JvmOverloads constructor(
     context: Context,
@@ -245,7 +245,7 @@ open class IPCWebView @JvmOverloads constructor(
     open fun setWebChromeClient(client: WebChromeClient?) {}
 
     open fun addJavascriptInterface(obj: Any, interfaceName: String) {
-        session?.addJavascriptInterface(DynamicInvokeHandler(obj), interfaceName)
+        session?.addJavascriptInterface(ProxyParcelable(obj), interfaceName)
     }
 
     open fun getZoomControls(): View? {

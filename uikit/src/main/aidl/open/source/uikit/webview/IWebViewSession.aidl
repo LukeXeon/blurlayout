@@ -1,7 +1,7 @@
 // IWebViewSession.aidl
 package open.source.uikit.webview;
 import android.view.Surface;
-import open.source.uikit.ipc.DynamicInvokeHandler;
+import open.source.uikit.ipc.ProxyParcelable;
 
 interface IWebViewSession {
     void setSurface(in Surface surface);
@@ -12,5 +12,5 @@ interface IWebViewSession {
 
     boolean zoomOut();
 
-    void addJavascriptInterface(in DynamicInvokeHandler obj,in String interfaceName);
+    void addJavascriptInterface(in ProxyParcelable obj, in String interfaceName);
 }

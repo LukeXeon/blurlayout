@@ -11,9 +11,8 @@ import android.view.Surface
 import android.webkit.WebView
 import android.widget.PopupWindow
 import androidx.annotation.MainThread
-import open.source.uikit.ipc.DynamicInvokeHandler
+import open.source.uikit.ipc.ProxyParcelable
 import java.util.concurrent.FutureTask
-import java.lang.reflect.Proxy.newProxyInstance
 
 class WebViewManagerService : Service() {
 
@@ -37,13 +36,13 @@ class WebViewManagerService : Service() {
             return blockOnMainThread { webView.zoomOut() }
         }
 
-        override fun getUrl(): String {
+        override fun getUrl(): String? {
             return blockOnMainThread { webView.url }
         }
 
         @SuppressLint("JavascriptInterface")
         override fun addJavascriptInterface(
-            obj: DynamicInvokeHandler,
+            obj: ProxyParcelable,
             interfaceName: String
         ) {
             blockOnMainThread {

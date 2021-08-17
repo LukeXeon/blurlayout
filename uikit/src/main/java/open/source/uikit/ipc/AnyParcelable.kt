@@ -2,12 +2,16 @@ package open.source.uikit.ipc
 
 import android.os.Parcel
 import android.os.Parcelable
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.ObjectInputStream
+import java.io.ObjectOutputStream
 
-class AnyParcelable(val value: Parcelable?) : Parcelable {
-    constructor(parcel: Parcel) : this(parcel.readParcelable<Parcelable>(AnyParcelable::class.java.classLoader))
+class AnyParcelable(val value: Any?) : Parcelable {
+    constructor(parcel: Parcel) : this(parcel.readValue(AnyParcelable::class.java.classLoader))
 
     override fun writeToParcel(parcel: Parcel, flags: Int) {
-        parcel.writeParcelable(value, flags)
+        parcel.writeValue(value)
     }
 
     override fun describeContents(): Int {
