@@ -66,13 +66,7 @@ class ProxyParcelable(
 
     override fun writeToParcel(parcel: Parcel, flags: Int) {
         parcel.writeStringArray(loadProxyInterfaces(target.javaClass))
-        parcel.writeStrongBinder(loadDynamicInvoke())
-    }
-
-    private fun loadDynamicInvoke(): IBinder {
-        return synchronized(handlers) {
-            handlers.getOrPut(target) { DynamicInvokeHandler(target) }
-        }
+        parcel.writeStrongBinder(loadDynamicInvoke(target))
     }
 
     override fun describeContents(): Int {
@@ -105,6 +99,12 @@ class ProxyParcelable(
 
         private fun unpack(any: AnyParcelable?): Any? {
             return any?.value
+        }
+
+        private fun loadDynamicInvoke(target: Any): IBinder {
+            return synchronized(handlers) {
+                handlers.getOrPut(target) { DynamicInvokeHandler(target) }
+            }
         }
 
         private fun loadProxyInterfaces(
