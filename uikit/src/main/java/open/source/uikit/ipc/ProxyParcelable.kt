@@ -3,44 +3,76 @@ package open.source.uikit.ipc
 import android.os.IBinder
 import android.os.Parcel
 import android.os.Parcelable
+import android.os.RemoteCallbackList
 import java.lang.ref.WeakReference
 import java.lang.reflect.InvocationHandler
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
 import java.util.*
 import kotlin.collections.HashSet
+import kotlin.math.floor
 
 class ProxyParcelable(
     private val target: Any
 ) : Parcelable {
     constructor(parcel: Parcel) : this(parcel.let {
-        val interfaces = parcel.createStringArray()
-            ?.map { Class.forName(it) }
-            ?.toTypedArray()
-            ?: emptyArray()
+        val interfaces = parcel.createStringArray()!!
+            .map { Class.forName(it) }
+            .toTypedArray()
         val obj = IDynamicInvoke.Stub
             .asInterface(parcel.readStrongBinder())
         Proxy.newProxyInstance(
-            ProxyParcelable::class.java.classLoader,
+            obj.javaClass.classLoader,
             interfaces,
             DynamicInvoker(obj)
         )
     })
 
-    private class DynamicInvoker(private val target: IDynamicInvoke) : InvocationHandler {
+    private class DynamicInvoker(target: IDynamicInvoke) : InvocationHandler {
+
+        private val callbackList = RemoteCallbackList<IDynamicInvoke>()
+
+        init {
+            callbackList.register(target)
+        }
+
         override fun invoke(proxy: Any?, method: Method, args: Array<out Any?>): Any? {
             return if (method.declaringClass == Any::class.java) {
                 method.invoke(this, args)
             } else {
-                unpack(
-                    target.dynamicInvoke(
-                        method.name,
-                        method.parameterTypes.map {
-                            it.name
-                        }.toTypedArray(),
-                        args.map { pack(it) }.toTypedArray()
+                try {
+                    if (callbackList.beginBroadcast() == 0) {
+                        return when (method.returnType) {
+                            Byte::class.javaPrimitiveType,
+                            Short::class.javaPrimitiveType,
+                            Int::class.javaPrimitiveType,
+                            Long::class.javaPrimitiveType -> {
+                                0.toByte()
+                            }
+                            Float::class.javaPrimitiveType, Double::class.javaPrimitiveType -> {
+                                0f
+                            }
+                            Boolean::class.javaPrimitiveType -> {
+                                false
+                            }
+                            else -> {
+                                null
+                            }
+                        }
+                    }
+                    val target = callbackList.getBroadcastItem(0)
+                    unpack(
+                        target.dynamicInvoke(
+                            method.name,
+                            method.parameterTypes.map {
+                                it.name
+                            }.toTypedArray(),
+                            args.map { pack(it) }.toTypedArray()
+                        )
                     )
-                )
+                } finally {
+                    callbackList.finishBroadcast()
+                }
             }
         }
     }
@@ -53,8 +85,8 @@ class ProxyParcelable(
             methodName: String,
             parameterTypes: Array<out String>,
             args: Array<out AnyParcelable>
-        ): AnyParcelable {
-            val target = reference.get() ?: throw NullPointerException()
+        ): AnyParcelable? {
+            val target = reference.get() ?: return null
             return pack(
                 target.javaClass.getMethod(
                     methodName,
@@ -81,17 +113,16 @@ class ProxyParcelable(
 
         private val primitiveTypes =
             arrayOf(
-                Short::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                Long::class.javaPrimitiveType,
-                Float::class.javaPrimitiveType,
-                Double::class.javaPrimitiveType,
-                Byte::class.javaPrimitiveType,
-                Boolean::class.javaPrimitiveType
-            ).asSequence().filterNotNull()
-                .map {
-                    it.name to it
-                }.toMap()
+                Short::class.javaPrimitiveType!!,
+                Int::class.javaPrimitiveType!!,
+                Long::class.javaPrimitiveType!!,
+                Float::class.javaPrimitiveType!!,
+                Double::class.javaPrimitiveType!!,
+                Byte::class.javaPrimitiveType!!,
+                Boolean::class.javaPrimitiveType!!
+            ).asSequence().map {
+                it.name to it
+            }.toMap()
 
         private val collect = HashSet<Class<*>>()
 
@@ -108,6 +139,7 @@ class ProxyParcelable(
                 handlers.getOrPut(target) { DynamicInvokeHandler(target) }
             }
         }
+
 
         private fun loadProxyInterfaces(
             clazz: Class<*>
