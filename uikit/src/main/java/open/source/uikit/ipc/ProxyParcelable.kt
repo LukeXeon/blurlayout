@@ -65,7 +65,7 @@ class ProxyParcelable(
     }
 
     override fun writeToParcel(parcel: Parcel, flags: Int) {
-        parcel.writeStringArray(loadProxyInterfaces(target.javaClass))
+        parcel.writeStringList(loadProxyInterfaces(target.javaClass))
         parcel.writeStrongBinder(loadDynamicInvoke(target))
     }
 
@@ -77,7 +77,7 @@ class ProxyParcelable(
 
         private val handlers = WeakHashMap<Any, DynamicInvokeHandler>()
 
-        private val proxyInterfaces = WeakHashMap<Class<*>, Array<String>>()
+        private val proxyInterfaces = WeakHashMap<Class<*>, List<String>>()
 
         private val primitiveTypes =
             arrayOf(
@@ -93,7 +93,7 @@ class ProxyParcelable(
                     it.name to it
                 }.toMap()
 
-        private val collect = HashSet<String>()
+        private val collect = HashSet<Class<*>>()
 
         private fun pack(any: Any?): AnyParcelable {
             return AnyParcelable(any)
@@ -111,40 +111,24 @@ class ProxyParcelable(
 
         private fun loadProxyInterfaces(
             clazz: Class<*>
-        ): Array<String> {
+        ): List<String> {
             return synchronized(proxyInterfaces) {
                 proxyInterfaces.getOrPut(clazz) {
                     try {
-                        findProxyInterfaces(
-                            clazz,
-                            collect
-                        )
+                        collect.clear()
+                        var current: Class<*>? = clazz
+                        while (current != null && current.classLoader != Any::class.java.classLoader) {
+                            collect.addAll(current.interfaces)
+                            current = clazz.superclass
+                        }
+                        collect.map { it.name }
                     } finally {
                         collect.clear()
+                    }.apply {
+                        require(isNotEmpty())
                     }
                 }
             }
-        }
-
-        private fun findProxyInterfaces(
-            clazz: Class<*>,
-            set: HashSet<String>
-        ): Array<String> {
-            if (clazz.classLoader == Any::class.java.classLoader) {
-                return set.toTypedArray()
-            }
-            set.addAll(
-                clazz.interfaces.asSequence()
-                    .filter {
-                        it.isAnnotationPresent(InvocationInterface::class.java)
-                    }.map {
-                        it.name
-                    }
-            )
-            return findProxyInterfaces(
-                clazz,
-                set
-            )
         }
 
         override fun createFromParcel(source: Parcel): ProxyParcelable {
