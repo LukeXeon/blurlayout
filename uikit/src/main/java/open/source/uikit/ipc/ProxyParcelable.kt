@@ -41,36 +41,18 @@ class ProxyParcelable(
             } else {
                 try {
                     if (callbackList.beginBroadcast() == 0) {
-                        return when (method.returnType) {
-                            Byte::class.javaPrimitiveType,
-                            Short::class.javaPrimitiveType,
-                            Int::class.javaPrimitiveType,
-                            Long::class.javaPrimitiveType -> {
-                                0.toByte()
-                            }
-                            Char::class.javaPrimitiveType -> {
-                                ' '
-                            }
-                            Float::class.javaPrimitiveType,
-                            Double::class.javaPrimitiveType -> {
-                                0f
-                            }
-                            Boolean::class.javaPrimitiveType -> {
-                                false
-                            }
-                            else -> {
-                                null
-                            }
-                        }
+                        return safeReturn(method.returnType, null)
                     }
                     val target = callbackList.getBroadcastItem(0)
-                    unpack(
-                        target.dynamicInvoke(
-                            method.name,
-                            method.parameterTypes.map {
-                                it.name
-                            }.toTypedArray(),
-                            args.map { pack(it) }.toTypedArray()
+                    safeReturn(
+                        method.returnType, unpack(
+                            target.dynamicInvoke(
+                                method.name,
+                                method.parameterTypes.map {
+                                    it.name
+                                }.toTypedArray(),
+                                args.map { pack(it) }.toTypedArray()
+                            )
                         )
                     )
                 } finally {
@@ -144,6 +126,28 @@ class ProxyParcelable(
             }
         }
 
+        private fun safeReturn(returnType: Class<*>, value: Any?): Any? {
+            if (value != null) {
+                return value
+            }
+            return when (returnType) {
+                Byte::class.javaPrimitiveType,
+                Short::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                Char::class.javaPrimitiveType,
+                Long::class.javaPrimitiveType,
+                Float::class.javaPrimitiveType,
+                Double::class.javaPrimitiveType -> {
+                    0.toByte()
+                }
+                Boolean::class.javaPrimitiveType -> {
+                    false
+                }
+                else -> {
+                    null
+                }
+            }
+        }
 
         private fun loadProxyInterfaces(
             clazz: Class<*>
