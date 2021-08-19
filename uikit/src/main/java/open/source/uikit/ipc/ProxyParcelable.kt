@@ -3,6 +3,7 @@ package open.source.uikit.ipc
 import android.os.IBinder
 import android.os.Parcel
 import android.os.Parcelable
+import android.os.Process
 import android.os.RemoteCallbackList
 import java.lang.ref.WeakReference
 import java.lang.reflect.InvocationHandler
@@ -12,19 +13,28 @@ import java.util.*
 import kotlin.collections.HashSet
 
 class ProxyParcelable(
-    private val target: Any
+    private val target: Any?
 ) : Parcelable {
-    constructor(parcel: Parcel) : this(parcel.let {
-        val interfaces = parcel.createStringArray()!!
-            .map { Class.forName(it) }
-            .toTypedArray()
-        val obj = IDynamicInvoke.Stub
-            .asInterface(parcel.readStrongBinder())
-        Proxy.newProxyInstance(
-            obj.javaClass.classLoader,
-            interfaces,
-            DynamicInvoker(obj)
-        )
+    constructor(parcel: Parcel) : this(parcel.run {
+        val pid = readInt()
+        val interfaces = createStringArray()
+        val binder = readStrongBinder()
+        if (binder == null || interfaces.isNullOrEmpty()) {
+            null
+        } else {
+            val obj = IDynamicInvoke.Stub
+                .asInterface(binder)
+            if (pid == Process.myPid() && obj is DynamicInvokeHandler) {
+                obj.reference.get()
+            } else {
+                Proxy.newProxyInstance(
+                    obj.javaClass.classLoader,
+                    interfaces.map { Class.forName(it) }
+                        .toTypedArray(),
+                    DynamicInvoker(obj)
+                )
+            }
+        }
     })
 
     private class DynamicInvoker(target: IDynamicInvoke) : InvocationHandler {
@@ -64,7 +74,7 @@ class ProxyParcelable(
 
     private class DynamicInvokeHandler(target: Any) : IDynamicInvoke.Stub() {
 
-        private val reference = WeakReference(target)
+        val reference = WeakReference(target)
 
         override fun dynamicInvoke(
             methodName: String,
@@ -82,7 +92,8 @@ class ProxyParcelable(
     }
 
     override fun writeToParcel(parcel: Parcel, flags: Int) {
-        parcel.writeStringList(loadProxyInterfaces(target.javaClass))
+        parcel.writeInt(Process.myPid())
+        parcel.writeStringList(loadProxyInterfaces(target?.javaClass))
         parcel.writeStrongBinder(loadDynamicInvoke(target))
     }
 
@@ -120,7 +131,8 @@ class ProxyParcelable(
             return any?.value
         }
 
-        private fun loadDynamicInvoke(target: Any): IBinder {
+        private fun loadDynamicInvoke(target: Any?): IBinder? {
+            target ?: return null
             return synchronized(handlers) {
                 handlers.getOrPut(target) { DynamicInvokeHandler(target) }
             }
@@ -150,8 +162,9 @@ class ProxyParcelable(
         }
 
         private fun loadProxyInterfaces(
-            clazz: Class<*>
-        ): List<String> {
+            clazz: Class<*>?
+        ): List<String>? {
+            clazz ?: return null
             return synchronized(proxyInterfaces) {
                 proxyInterfaces.getOrPut(clazz) {
                     try {
