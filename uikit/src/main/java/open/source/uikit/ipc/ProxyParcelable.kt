@@ -48,7 +48,11 @@ class ProxyParcelable(
                             Long::class.javaPrimitiveType -> {
                                 0.toByte()
                             }
-                            Float::class.javaPrimitiveType, Double::class.javaPrimitiveType -> {
+                            Char::class.javaPrimitiveType -> {
+                                ' '
+                            }
+                            Float::class.javaPrimitiveType,
+                            Double::class.javaPrimitiveType -> {
                                 0f
                             }
                             Boolean::class.javaPrimitiveType -> {
@@ -117,6 +121,7 @@ class ProxyParcelable(
                 Long::class.javaPrimitiveType!!,
                 Float::class.javaPrimitiveType!!,
                 Double::class.javaPrimitiveType!!,
+                Char::class.javaPrimitiveType!!,
                 Byte::class.javaPrimitiveType!!,
                 Boolean::class.javaPrimitiveType!!
             ).asSequence().map {
