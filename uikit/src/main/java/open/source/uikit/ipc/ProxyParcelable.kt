@@ -89,6 +89,14 @@ class ProxyParcelable(
                 ).invoke(target, *args.map { unpack(it) }.toTypedArray())
             )
         }
+
+        override fun pingBinder(): Boolean {
+            return reference.get() != null
+        }
+
+        override fun isBinderAlive(): Boolean {
+            return reference.get() != null
+        }
     }
 
     override fun writeToParcel(parcel: Parcel, flags: Int) {
