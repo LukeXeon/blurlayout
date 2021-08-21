@@ -21,6 +21,8 @@ interface BitmapPool {
 
     companion object {
 
+        private const val PREFERENCES_NAME = "open.source.uikit.preferences"
+
         private const val FACTORY_KEY = "factory"
 
         private const val APP_VERSION_KEY = "app_version"

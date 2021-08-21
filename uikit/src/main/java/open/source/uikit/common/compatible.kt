@@ -14,8 +14,6 @@ import java.lang.reflect.InvocationTargetException
 
 private const val TAG = "compatible"
 
-internal const val PREFERENCES_NAME = "open.source.uikit.preferences"
-
 internal val application by lazy {
     try {
         @SuppressLint("PrivateApi")
