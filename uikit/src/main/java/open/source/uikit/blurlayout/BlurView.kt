@@ -42,9 +42,9 @@ class BlurView @JvmOverloads constructor(
     private val processLock = Any()
     private val visibleRect = Rect()
     private val tempOptions = BitmapFactory.Options()
-    private var attachInfo: RootAttachInfo?
+    private var attachInfo: ViewAttachSetInfo?
         get() {
-            return rootView.getTag(R.id.root_attach_info) as? RootAttachInfo
+            return rootView.getTag(R.id.root_attach_info) as? ViewAttachSetInfo
         }
         set(value) {
             rootView.setTag(R.id.root_attach_info, value)
@@ -121,7 +121,7 @@ class BlurView @JvmOverloads constructor(
         setLayerType(LAYER_TYPE_HARDWARE, null)
     }
 
-    private class RootAttachInfo :
+    private class ViewAttachSetInfo :
         ViewTreeObserver.OnPreDrawListener {
         val set = HashSet<BlurView>()
 
@@ -462,7 +462,7 @@ class BlurView @JvmOverloads constructor(
         super.onAttachedToWindow()
         var info = attachInfo
         if (info == null) {
-            info = RootAttachInfo()
+            info = ViewAttachSetInfo()
             viewTreeObserver.addOnPreDrawListener(info)
             attachInfo = info
         }
