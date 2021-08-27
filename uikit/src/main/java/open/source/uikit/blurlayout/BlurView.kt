@@ -20,7 +20,6 @@ import androidx.annotation.Px
 import androidx.annotation.RequiresApi
 import androidx.annotation.WorkerThread
 import open.source.uikit.R
-import open.source.uikit.common.BitmapPool
 import open.source.uikit.common.acquireLatestImageCompat
 import open.source.uikit.common.createAsync
 import open.source.uikit.common.use

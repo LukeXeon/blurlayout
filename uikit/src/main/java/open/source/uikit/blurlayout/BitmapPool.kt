@@ -1,9 +1,10 @@
-package open.source.uikit.common
+package open.source.uikit.blurlayout
 
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import com.bumptech.glide.Glide
+import open.source.uikit.common.application
 import java.util.*
 
 interface BitmapPool {

@@ -1,15 +1,10 @@
 package com.luke.android.blurlayout.sample
 
-import android.content.ComponentName
+import android.app.ActivityManager
 import android.content.Context
-import android.content.Intent
-import android.content.ServiceConnection
 import android.os.Bundle
-import android.os.IBinder
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
-import open.source.uikit.webview.IWebViewManagerService
-import open.source.uikit.webview.WebViewManagerService
 
 class MainActivity : AppCompatActivity() {
 
@@ -18,7 +13,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
+        View(this).windowToken
+        val manager= getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     }
 
 
