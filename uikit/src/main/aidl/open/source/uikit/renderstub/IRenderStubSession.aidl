@@ -3,6 +3,7 @@ package open.source.uikit.renderstub;
 import android.view.Surface;
 import android.view.MotionEvent;
 import android.os.IBinder;
+import android.content.res.Configuration;
 
 // Declare any non-default types here with import statements
 
@@ -11,7 +12,15 @@ interface IRenderStubSession {
 
     void setSurface(in Surface surface);
 
-    void applyStatus(in IBinder token, in Surface surface, int w, int h);
+    void applyStatus(
+        in IBinder token,
+        in Configuration configuration,
+        in Surface surface,
+        int w,
+        int h
+    );
+
+    void onConfigurationChanged(in Configuration configuration);
 
     void onAttachedToWindow(in IBinder token);
 

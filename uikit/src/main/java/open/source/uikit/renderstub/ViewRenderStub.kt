@@ -1,6 +1,7 @@
 package open.source.uikit.renderstub
 
 import android.content.Context
+import android.content.res.Configuration
 import android.graphics.SurfaceTexture
 import android.os.SystemClock
 import android.util.AttributeSet
@@ -46,7 +47,15 @@ class ViewRenderStub @JvmOverloads constructor(
         }
 
         override fun onConnected(s: IRenderStubSession) {
-            s.runCatching { applyStatus(applicationWindowToken, surface, width, height) }
+            s.runCatching {
+                applyStatus(
+                    applicationWindowToken,
+                    rootView.resources.configuration,
+                    surface,
+                    width,
+                    height
+                )
+            }
             session = s
         }
 
@@ -63,6 +72,10 @@ class ViewRenderStub @JvmOverloads constructor(
         }
         array.recycle()
         super.setSurfaceTextureListener(callbacks)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration?) {
+        session?.runCatching { onConfigurationChanged(newConfig) }
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {

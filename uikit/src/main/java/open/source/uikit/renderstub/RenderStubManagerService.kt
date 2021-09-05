@@ -2,6 +2,7 @@ package open.source.uikit.renderstub
 
 import android.app.Service
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.*
 import android.util.Log
 import android.view.*
@@ -60,7 +61,7 @@ class RenderStubManagerService : Service() {
         layoutId: Int
     ) : IRenderStubSession.Stub(), IBinder.DeathRecipient {
         private val window = PopupWindow()
-        private val root = object : FrameLayout(this@RenderStubManagerService),
+        private val content = object : FrameLayout(this@RenderStubManagerService),
             ViewTreeObserver.OnPreDrawListener {
             @Volatile
             var surface: Surface? = null
@@ -124,15 +125,19 @@ class RenderStubManagerService : Service() {
                 return false
             }
 
+            override fun onConfigurationChanged(newConfig: Configuration?) {
+                super.onConfigurationChanged(newConfig)
+            }
+
         }
 
         init {
             window.isClippingEnabled = false
-            window.contentView = root
+            window.contentView = content
             linkToDeath(this, 0)
             mainThread.postAtFrontOfQueue {
                 LayoutInflater.from(this@RenderStubManagerService)
-                    .inflate(layoutId, root, true)
+                    .inflate(layoutId, content, true)
             }
         }
 
@@ -148,20 +153,33 @@ class RenderStubManagerService : Service() {
 
         override fun dispatchTouchEvent(event: MotionEvent): Boolean {
             try {
-                return root.dispatchTouchEvent(event)
+                return content.dispatchTouchEvent(event)
             } finally {
                 event.recycle()
             }
         }
 
         override fun setSurface(surface: Surface?) {
-            root.surface = surface
+            content.surface = surface
         }
 
-        override fun applyStatus(token: IBinder?, surface: Surface?, w: Int, h: Int) {
+        override fun onConfigurationChanged(configuration: Configuration?) {
+            mainThread.post {
+                content.rootView.dispatchConfigurationChanged(configuration)
+            }
+        }
+
+        override fun applyStatus(
+            token: IBinder?,
+            configuration: Configuration?,
+            surface: Surface?,
+            w: Int,
+            h: Int
+        ) {
             mainThread.post {
                 window.dismiss()
-                root.surface = surface
+                content.surface = surface
+                content.rootView.dispatchConfigurationChanged(configuration)
                 window.width = w
                 window.height = h
                 if (token != null) {
@@ -184,9 +202,12 @@ class RenderStubManagerService : Service() {
 
         override fun onSizeChanged(w: Int, h: Int) {
             mainThread.post {
-                window.width = w
-                window.height = h
-                window.update()
+                if (window.isShowing) {
+                    window.update(w, h)
+                } else {
+                    window.width = w
+                    window.height = h
+                }
             }
         }
 

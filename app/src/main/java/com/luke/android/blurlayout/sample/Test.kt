@@ -12,6 +12,5 @@ class Test @JvmOverloads constructor(
     init {
         settings.javaScriptEnabled = true
         loadUrl("https://m.bilibili.com")
-        setBackgroundColor(Color.RED)
     }
 }
