@@ -11,7 +11,7 @@ interface IRenderStubSession {
 
     void setSurface(in Surface surface);
 
-    void setStates(in IBinder token, in Surface surface, int w, int h);
+    void applyStatus(in IBinder token, in Surface surface, int w, int h);
 
     void onAttachedToWindow(in IBinder token);
 

@@ -46,7 +46,7 @@ class ViewRenderStub @JvmOverloads constructor(
         }
 
         override fun onConnected(s: IRenderStubSession) {
-            s.runCatching { setStates(applicationWindowToken, surface, width, height) }
+            s.runCatching { applyStatus(applicationWindowToken, surface, width, height) }
             session = s
         }
 

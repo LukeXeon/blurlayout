@@ -158,7 +158,7 @@ class RenderStubManagerService : Service() {
             root.surface = surface
         }
 
-        override fun setStates(token: IBinder?, surface: Surface?, w: Int, h: Int) {
+        override fun applyStatus(token: IBinder?, surface: Surface?, w: Int, h: Int) {
             mainThread.post {
                 window.dismiss()
                 root.surface = surface
