@@ -1,5 +1,6 @@
 package open.source.uikit.renderstub
 
+import android.app.Application
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -13,7 +14,7 @@ import kotlin.collections.HashSet
 import kotlin.concurrent.thread
 
 
-class RenderStubManager(private val context: Context) {
+class RenderStubManager(private val context: Application) {
     private var service: IRenderStubManagerService? = null
     private val pendingOps = LinkedList<PendingOp>()
     private val queue = ReferenceQueue<Connection>()
@@ -113,7 +114,7 @@ class RenderStubManager(private val context: Context) {
             synchronized(lock) {
                 var s = instance
                 if (s == null) {
-                    s = RenderStubManager(context.applicationContext)
+                    s = RenderStubManager(context.applicationContext as Application)
                     instance = s
                 }
                 return s
