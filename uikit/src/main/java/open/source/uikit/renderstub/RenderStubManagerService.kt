@@ -1,9 +1,13 @@
 package open.source.uikit.renderstub
 
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.graphics.Canvas
+import android.graphics.Color
 import android.os.*
+import android.util.AttributeSet
 import android.util.Log
 import android.view.*
 import android.widget.FrameLayout
@@ -12,6 +16,9 @@ import androidx.annotation.AnyThread
 import androidx.annotation.LayoutRes
 import androidx.annotation.MainThread
 import java.lang.reflect.InvocationTargetException
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 
 class RenderStubManagerService : Service() {
@@ -56,93 +63,113 @@ class RenderStubManagerService : Service() {
         super.startActivities(intents, options)
     }
 
-    private inner class Session(
-        @LayoutRes
-        layoutId: Int
-    ) : IRenderStubSession.Stub(), IBinder.DeathRecipient {
-        private val window = PopupWindow()
-        private val content = object : FrameLayout(this@RenderStubManagerService),
-            ViewTreeObserver.OnPreDrawListener {
-            @Volatile
-            var surface: Surface? = null
-                set(value) {
-                    field = value
-                    if (value != null) {
-                        if (Looper.myLooper() == mainThread.looper) {
-                            invalidate()
-                        } else {
-                            postInvalidate()
-                        }
+    private class HostView @JvmOverloads constructor(
+        context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
+    ) : FrameLayout(context, attrs, defStyleAttr),
+        ViewTreeObserver.OnPreDrawListener,
+        ViewTreeObserver.OnScrollChangedListener {
+        @Volatile
+        var surface: Surface? = null
+            set(value) {
+                field = value
+                if (value != null) {
+                    if (Looper.myLooper() == mainThread.looper) {
+                        invalidate()
+                    } else {
+                        postInvalidate()
                     }
                 }
+            }
 
-            @Volatile
-            private var pendingTouchEvent: MotionEvent? = null
+        @Volatile
+        private var pendingTouchEvent: MotionEvent? = null
 
-            @Volatile
-            private var dispatchTouchEventResult: Boolean = false
+        @Volatile
+        private var dispatchTouchEventResult: Boolean = false
 
-            private val drawRunnable = Runnable {
-                val surface = surface
-                if (surface != null) {
+        @Volatile
+        private var pendingCanvas: Canvas? = null
+
+        private val unlockCanvasAndPostRunnable = Runnable {
+            surface?.unlockCanvasAndPost(pendingCanvas)
+            pendingCanvas = null
+        }
+
+        private val dispatchTouchEventRunnable = Runnable {
+            dispatchTouchEventResult = super.dispatchTouchEvent(pendingTouchEvent)
+            pendingTouchEvent = null
+        }
+
+        init {
+            viewTreeObserver.addOnPreDrawListener(this)
+            viewTreeObserver.addOnScrollChangedListener(this)
+        }
+
+        override fun onScrollChanged() {
+            onPreDraw()
+        }
+
+        override fun onPreDraw(): Boolean {
+            val surface = surface
+            if (surface != null) {
+                if (pendingCanvas == null) {
                     val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                         surface.lockHardwareCanvas()
                     } else {
                         surface.lockCanvas(null)
                     }
                     try {
-                        draw(recorder)
+                        dispatchDraw(recorder)
                     } finally {
-                        surface.unlockCanvasAndPost(recorder)
+                        pendingCanvas = recorder
+                        renderThread.post(unlockCanvasAndPostRunnable)
                     }
+                } else {
+                    invalidate()
                 }
             }
-            private val dispatchTouchEventRunnable = Runnable {
-                dispatchTouchEventResult = super.dispatchTouchEvent(pendingTouchEvent)
-                pendingTouchEvent = null
-            }
-
-            init {
-                viewTreeObserver.addOnPreDrawListener(this)
-            }
-
-            @AnyThread
-            override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
-                if (Looper.myLooper() == mainThread.looper) {
-                    return super.dispatchTouchEvent(ev)
-                }
-                pendingTouchEvent = ev
-                mainThread.post(dispatchTouchEventRunnable)
-                while (true) {
-                    if (pendingTouchEvent == null) {
-                        return dispatchTouchEventResult
-                    }
-                }
-            }
-
-            override fun onPreDraw(): Boolean {
-                renderThread.post(drawRunnable)
-                return false
-            }
-
-            override fun onConfigurationChanged(newConfig: Configuration?) {
-                super.onConfigurationChanged(newConfig)
-            }
-
+            return false
         }
+
+        @AnyThread
+        override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
+            if (Looper.myLooper() == mainThread.looper) {
+                return super.dispatchTouchEvent(ev)
+            }
+            pendingTouchEvent = ev
+            mainThread.post(dispatchTouchEventRunnable)
+            while (true) {
+                if (pendingTouchEvent == null) {
+                    return dispatchTouchEventResult
+                }
+            }
+        }
+
+        override fun onConfigurationChanged(newConfig: Configuration?) {
+            super.onConfigurationChanged(newConfig)
+        }
+
+    }
+
+    private inner class Session(
+        @LayoutRes
+        layoutId: Int
+    ) : IRenderStubSession.Stub(), IBinder.DeathRecipient {
+        private val window = PopupWindow()
+        private val host = HostView(this@RenderStubManagerService)
 
         init {
             window.isClippingEnabled = false
-            window.contentView = content
+            window.contentView = host
             linkToDeath(this, 0)
             mainThread.postAtFrontOfQueue {
                 LayoutInflater.from(this@RenderStubManagerService)
-                    .inflate(layoutId, content, true)
+                    .inflate(layoutId, host, true)
             }
         }
 
         @MainThread
-        private fun showWindow(token: IBinder) {
+        private fun attach(token: IBinder) {
             window.showAtLocation(
                 token,
                 Gravity.CENTER,
@@ -153,19 +180,19 @@ class RenderStubManagerService : Service() {
 
         override fun dispatchTouchEvent(event: MotionEvent): Boolean {
             try {
-                return content.dispatchTouchEvent(event)
+                return host.dispatchTouchEvent(event)
             } finally {
                 event.recycle()
             }
         }
 
         override fun setSurface(surface: Surface?) {
-            content.surface = surface
+            host.surface = surface
         }
 
         override fun onConfigurationChanged(configuration: Configuration?) {
             mainThread.post {
-                content.rootView.dispatchConfigurationChanged(configuration)
+                host.rootView.dispatchConfigurationChanged(configuration)
             }
         }
 
@@ -178,19 +205,19 @@ class RenderStubManagerService : Service() {
         ) {
             mainThread.post {
                 window.dismiss()
-                content.surface = surface
-                content.rootView.dispatchConfigurationChanged(configuration)
+                host.surface = surface
+                host.rootView.dispatchConfigurationChanged(configuration)
                 window.width = w
                 window.height = h
                 if (token != null) {
-                    showWindow(token)
+                    attach(token)
                 }
             }
         }
 
         override fun onAttachedToWindow(token: IBinder) {
             mainThread.post {
-                showWindow(token)
+                attach(token)
             }
         }
 
