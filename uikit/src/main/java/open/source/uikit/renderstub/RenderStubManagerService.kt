@@ -2,16 +2,15 @@ package open.source.uikit.renderstub
 
 import android.app.Service
 import android.content.Intent
-import android.graphics.Canvas
 import android.os.*
 import android.util.Log
 import android.view.*
 import android.widget.FrameLayout
 import android.widget.PopupWindow
+import androidx.annotation.AnyThread
 import androidx.annotation.LayoutRes
+import androidx.annotation.MainThread
 import java.lang.reflect.InvocationTargetException
-import java.util.concurrent.Callable
-import java.util.concurrent.FutureTask
 
 
 class RenderStubManagerService : Service() {
@@ -61,16 +60,28 @@ class RenderStubManagerService : Service() {
         layoutId: Int
     ) : IRenderStubSession.Stub(), IBinder.DeathRecipient {
         private val window = PopupWindow()
-        private val root = object : FrameLayout(this@RenderStubManagerService) {
+        private val root = object : FrameLayout(this@RenderStubManagerService),
+            ViewTreeObserver.OnPreDrawListener {
+            @Volatile
             var surface: Surface? = null
                 set(value) {
                     field = value
-                    invalidate()
+                    if (value != null) {
+                        if (Looper.myLooper() == mainThread.looper) {
+                            invalidate()
+                        } else {
+                            postInvalidate()
+                        }
+                    }
                 }
 
+            @Volatile
+            private var pendingTouchEvent: MotionEvent? = null
 
-            override fun dispatchDraw(canvas: Canvas?) {
-                buildDrawingCache()
+            @Volatile
+            private var dispatchTouchEventResult: Boolean = false
+
+            private val onDrawRunnable = Runnable {
                 val surface = surface
                 if (surface != null) {
                     val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -79,18 +90,38 @@ class RenderStubManagerService : Service() {
                         surface.lockCanvas(null)
                     }
                     try {
-                        super.dispatchDraw(recorder)
+                        draw(recorder)
                     } finally {
                         surface.unlockCanvasAndPost(recorder)
                     }
-                } else {
-                    super.dispatchDraw(canvas)
+                }
+            }
+            private val dispatchTouchEventRunnable = Runnable {
+                dispatchTouchEventResult = super.dispatchTouchEvent(pendingTouchEvent)
+                pendingTouchEvent = null
+            }
+
+            init {
+                viewTreeObserver.addOnPreDrawListener(this)
+            }
+
+            @AnyThread
+            override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
+                if (Looper.myLooper() == mainThread.looper) {
+                    return super.dispatchTouchEvent(ev)
+                }
+                pendingTouchEvent = ev
+                mainThread.post(dispatchTouchEventRunnable)
+                while (true) {
+                    if (pendingTouchEvent == null) {
+                        return dispatchTouchEventResult
+                    }
                 }
             }
 
-            override fun onDescendantInvalidated(child: View, target: View) {
-                invalidate()
-                super.onDescendantInvalidated(child, target)
+            override fun onPreDraw(): Boolean {
+                renderThread.post(onDrawRunnable)
+                return false
             }
 
         }
@@ -105,20 +136,26 @@ class RenderStubManagerService : Service() {
             }
         }
 
+        @MainThread
+        private fun showWindow(token: IBinder) {
+            window.showAtLocation(
+                token,
+                Gravity.CENTER,
+                Int.MIN_VALUE,
+                Int.MIN_VALUE
+            )
+        }
+
         override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-            return try {
-                invokeOnMainThreadAndAwait {
-                    root.dispatchTouchEvent(event)
-                }
+            try {
+                return root.dispatchTouchEvent(event)
             } finally {
                 event.recycle()
             }
         }
 
         override fun setSurface(surface: Surface?) {
-            mainThread.post {
-                root.surface = surface
-            }
+            root.surface = surface
         }
 
         override fun setStates(token: IBinder?, surface: Surface?, w: Int, h: Int) {
@@ -128,24 +165,14 @@ class RenderStubManagerService : Service() {
                 window.width = w
                 window.height = h
                 if (token != null) {
-                    window.showAtLocation(
-                        token,
-                        Gravity.CENTER,
-                        Int.MIN_VALUE,
-                        Int.MIN_VALUE
-                    )
+                    showWindow(token)
                 }
             }
         }
 
         override fun onAttachedToWindow(token: IBinder) {
             mainThread.post {
-                window.showAtLocation(
-                    token,
-                    Gravity.CENTER,
-                    Int.MIN_VALUE,
-                    Int.MIN_VALUE
-                )
+                showWindow(token)
             }
         }
 
@@ -210,16 +237,11 @@ class RenderStubManagerService : Service() {
             return Handler(looper)
         }
 
-        private val mainThread = createAsync(Looper.getMainLooper())
+        private val renderThread = createAsync(
+            HandlerThread("RenderStubThread").apply { start() }.looper
+        )
 
-        private fun <T> invokeOnMainThreadAndAwait(callable: Callable<T>): T {
-            if (mainThread.looper == Looper.myLooper()) {
-                return callable.call()
-            }
-            val task = FutureTask(callable)
-            mainThread.post(task)
-            return task.get()
-        }
+        private val mainThread = createAsync(Looper.getMainLooper())
 
         private val showAtLocationMethod = PopupWindow::class.java
             .getDeclaredMethod(

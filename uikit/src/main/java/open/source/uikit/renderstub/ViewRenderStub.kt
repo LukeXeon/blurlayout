@@ -70,11 +70,12 @@ class ViewRenderStub @JvmOverloads constructor(
         if (s != null) {
             val start = SystemClock.uptimeMillis()
             try {
-                return s.dispatchTouchEvent(event)
+                val r = s.dispatchTouchEvent(event)
+                Log.d(TAG, "dispatchTouchEvent time:" + (SystemClock.uptimeMillis() - start))
+                return r
             } catch (e: Throwable) {
 
             }
-            Log.d(TAG, "dispatchTouchEvent time:" + (SystemClock.uptimeMillis() - start))
         }
         return super.dispatchTouchEvent(event)
     }
