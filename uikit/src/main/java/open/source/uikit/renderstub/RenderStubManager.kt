@@ -5,7 +5,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.Process
 import java.lang.ref.PhantomReference
 import java.lang.ref.ReferenceQueue
@@ -18,7 +20,7 @@ class RenderStubManager(private val context: Application) {
     private var service: IRenderStubManagerService? = null
     private val pendingOps = LinkedList<PendingOp>()
     private val queue = ReferenceQueue<Connection>()
-    private val records = HashSet<Record<Connection>>()
+    private val records = HashSet<Record>()
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val s = IRenderStubManagerService.Stub.asInterface(binder)
@@ -32,8 +34,9 @@ class RenderStubManager(private val context: Application) {
         override fun onServiceDisconnected(name: ComponentName?) {
             service = null
             synchronized(records) {
-                for (record in records) {
-                    record.get()?.onDisconnect()
+                // need copy
+                for (record in records.toTypedArray()) {
+                    record.close()
                 }
                 records.clear()
             }
@@ -43,24 +46,43 @@ class RenderStubManager(private val context: Application) {
 
     init {
         bindService()
-        thread {
+        thread(name = "RenderStubMonitor") {
             Process.setThreadPriority(Process.THREAD_PRIORITY_LOWEST)
             while (true) {
                 val record = queue.remove() as Record
-                val session = record.session
                 synchronized(records) {
-                    records.remove(record)
+                    if (records.remove(record)) {
+                        record.close()
+                    }
                 }
-                session.close()
             }
         }
     }
 
-    private class Record<T>(
-        referent: T,
-        q: ReferenceQueue<in T>,
-        val session: IRenderStubSession
-    ) : PhantomReference<T>(referent, q)
+    private inner class Record(
+        referent: Connection,
+        q: ReferenceQueue<Connection>,
+        private val session: IRenderStubSession
+    ) : PhantomReference<Connection>(referent, q),
+        IBinder.DeathRecipient,
+        Runnable {
+
+        override fun run() {
+            get()?.onDisconnect()
+        }
+
+        fun close() {
+            session.close()
+            binderDied()
+        }
+
+        override fun binderDied() {
+            synchronized(records) {
+                records.remove(this)
+            }
+            mainThread.post(this)
+        }
+    }
 
     private class PendingOp(
         val layoutId: Int,
@@ -82,6 +104,7 @@ class RenderStubManager(private val context: Application) {
     ) {
         val session = service.openSession(layoutId)
         val record = Record(connection, queue, session)
+        session.asBinder().linkToDeath(record, 0)
         synchronized(records) {
             records.add(record)
         }
@@ -92,6 +115,9 @@ class RenderStubManager(private val context: Application) {
         layoutId: Int,
         connection: Connection
     ) {
+        if (Looper.myLooper() != mainThread.looper) {
+            throw IllegalStateException()
+        }
         val s = service
         if (s != null) {
             openSession(s, layoutId, connection)
@@ -107,6 +133,7 @@ class RenderStubManager(private val context: Application) {
     }
 
     companion object {
+        private val mainThread = Handler(Looper.getMainLooper())
         private val lock = Any()
         private var instance: RenderStubManager? = null
 
