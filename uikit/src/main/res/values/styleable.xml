@@ -4,5 +4,8 @@
         <attr name="blurSampling" format="float" />
         <attr name="blurRadius" format="float" />
     </declare-styleable>
-    <item name="root_attach_info" type="id"/>
+    <declare-styleable name="ViewRenderStub">
+        <attr name="android:layout" />
+    </declare-styleable>
+    <item name="root_attach_info" type="id" />
 </resources>

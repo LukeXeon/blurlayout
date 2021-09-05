@@ -5,6 +5,6 @@
 
     <application>
         <service
-            android:name=".webview.WebViewManagerService" android:process=":web" />
+            android:name=".renderstub.RenderStubManagerService" android:process=":web" />
     </application>
 </manifest>
