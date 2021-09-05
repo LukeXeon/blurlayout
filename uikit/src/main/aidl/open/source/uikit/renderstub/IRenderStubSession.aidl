@@ -2,6 +2,7 @@
 package open.source.uikit.renderstub;
 import android.view.Surface;
 import android.view.MotionEvent;
+import android.view.KeyEvent;
 import android.os.IBinder;
 import android.content.res.Configuration;
 
@@ -9,6 +10,8 @@ import android.content.res.Configuration;
 
 interface IRenderStubSession {
     boolean dispatchTouchEvent(in MotionEvent event);
+
+    boolean dispatchKeyEvent(in KeyEvent event);
 
     void setSurface(in Surface surface);
 

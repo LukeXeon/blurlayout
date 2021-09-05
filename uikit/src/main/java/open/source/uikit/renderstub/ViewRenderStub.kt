@@ -6,6 +6,7 @@ import android.graphics.SurfaceTexture
 import android.os.SystemClock
 import android.util.AttributeSet
 import android.util.Log
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.Surface
 import android.view.TextureView
@@ -106,6 +107,21 @@ class ViewRenderStub @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         session?.runCatching { onSizeChanged(w, h) }
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent?): Boolean {
+        val s = session
+        if (s != null) {
+            val start = SystemClock.uptimeMillis()
+            try {
+                val r = s.dispatchKeyEvent(event)
+                Log.d(TAG, "dispatchKeyEvent time:" + (SystemClock.uptimeMillis() - start))
+                return r
+            } catch (e: Throwable) {
+
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     override fun setSurfaceTexture(surfaceTexture: SurfaceTexture?) {
