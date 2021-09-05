@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Canvas
-import android.graphics.Color
 import android.os.*
 import android.util.AttributeSet
 import android.util.Log
@@ -16,9 +15,6 @@ import androidx.annotation.AnyThread
 import androidx.annotation.LayoutRes
 import androidx.annotation.MainThread
 import java.lang.reflect.InvocationTargetException
-import java.util.concurrent.FutureTask
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 
 
 class RenderStubManagerService : Service() {
