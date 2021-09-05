@@ -82,7 +82,7 @@ class RenderStubManagerService : Service() {
             @Volatile
             private var dispatchTouchEventResult: Boolean = false
 
-            private val onDrawRunnable = Runnable {
+            private val drawRunnable = Runnable {
                 val surface = surface
                 if (surface != null) {
                     val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -121,7 +121,7 @@ class RenderStubManagerService : Service() {
             }
 
             override fun onPreDraw(): Boolean {
-                renderThread.post(onDrawRunnable)
+                renderThread.post(drawRunnable)
                 return false
             }
 
