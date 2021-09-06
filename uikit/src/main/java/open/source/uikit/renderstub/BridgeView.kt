@@ -72,7 +72,7 @@ class BridgeView @JvmOverloads constructor(
         }
 
         override fun run() {
-            surface?.unlockCanvasAndPost(pendingCanvas)
+            surface?.runCatching { unlockCanvasAndPost(pendingCanvas) }
             pendingCanvas = null
         }
     }
