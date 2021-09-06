@@ -1,5 +1,6 @@
 package open.source.uikit.renderstub
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.os.Build
@@ -14,7 +15,7 @@ import open.source.uikit.common.createAsync
 class BridgeView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr),
-    ViewTreeObserver.OnPreDrawListener,
+    ViewTreeObserver.OnDrawListener,
     ViewTreeObserver.OnScrollChangedListener,
     ViewTreeObserver.OnGlobalFocusChangeListener {
 
@@ -109,22 +110,23 @@ class BridgeView @JvmOverloads constructor(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         viewTreeObserver.addOnGlobalFocusChangeListener(this)
-        viewTreeObserver.addOnPreDrawListener(this)
+        viewTreeObserver.addOnDrawListener(this)
         viewTreeObserver.addOnScrollChangedListener(this)
     }
 
     override fun onDetachedFromWindow() {
         viewTreeObserver.removeOnGlobalFocusChangeListener(this)
-        viewTreeObserver.removeOnPreDrawListener(this)
+        viewTreeObserver.removeOnDrawListener(this)
         viewTreeObserver.removeOnScrollChangedListener(this)
         super.onDetachedFromWindow()
     }
 
+    @SuppressLint("WrongCall")
     override fun onScrollChanged() {
-        onPreDraw()
+        onDraw()
     }
 
-    override fun onPreDraw(): Boolean {
+    override fun onDraw() {
         val canvas = surfaceHolder.lockCanvas()
         if (canvas != null) {
             draw(canvas)
@@ -132,7 +134,6 @@ class BridgeView @JvmOverloads constructor(
         } else {
             invalidate()
         }
-        return true
     }
 
     override fun onGlobalFocusChanged(
