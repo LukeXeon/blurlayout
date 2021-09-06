@@ -129,8 +129,10 @@ class BridgeView @JvmOverloads constructor(
         if (canvas != null) {
             draw(canvas)
             surfaceHolder.unlockCanvasAndPost(canvas)
+        } else {
+            invalidate()
         }
-        return false
+        return true
     }
 
     override fun onGlobalFocusChanged(
