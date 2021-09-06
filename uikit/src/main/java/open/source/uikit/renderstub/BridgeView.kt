@@ -6,10 +6,7 @@ import android.os.Build
 import android.os.HandlerThread
 import android.os.Looper
 import android.util.AttributeSet
-import android.view.KeyEvent
-import android.view.MotionEvent
-import android.view.Surface
-import android.view.ViewTreeObserver
+import android.view.*
 import android.widget.FrameLayout
 import androidx.annotation.AnyThread
 import open.source.uikit.common.createAsync
@@ -18,7 +15,8 @@ class BridgeView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr),
     ViewTreeObserver.OnPreDrawListener,
-    ViewTreeObserver.OnScrollChangedListener {
+    ViewTreeObserver.OnScrollChangedListener,
+    ViewTreeObserver.OnGlobalFocusChangeListener {
 
     private abstract class EventDispatcher<T> : Runnable {
 
@@ -49,9 +47,42 @@ class BridgeView @JvmOverloads constructor(
         }
     }
 
-    var surface: Surface? = null
+    private class SurfaceHolder : Runnable {
+        @Volatile
+        var surface: Surface? = null
+
+        @Volatile
+        private var pendingCanvas: Canvas? = null
+
+        fun lockCanvas(): Canvas? {
+            val surface = surface
+            if (surface != null && pendingCanvas == null) {
+                return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    surface.lockHardwareCanvas()
+                } else {
+                    surface.lockCanvas(null)
+                }
+            }
+            return null
+        }
+
+        fun unlockCanvasAndPost(canvas: Canvas) {
+            pendingCanvas = canvas
+            renderThread.post(this)
+        }
+
+        override fun run() {
+            surface?.unlockCanvasAndPost(pendingCanvas)
+            pendingCanvas = null
+        }
+    }
+
+    var surface: Surface?
+        get() {
+            return surfaceHolder.surface
+        }
         set(value) {
-            field = value
+            surfaceHolder.surface = value
             if (value != null) {
                 invalidate()
             }
@@ -69,27 +100,24 @@ class BridgeView @JvmOverloads constructor(
         }
     }
 
-    private val unlockCanvasAndPostDispatcher = object : Runnable {
-        @Volatile
-        private var pendingCanvas: Canvas? = null
-
-        val hasPending: Boolean
-            get() = pendingCanvas != null
-
-        fun unlockCanvasAndPost(canvas: Canvas) {
-            pendingCanvas = canvas
-            renderThread.post(this)
-        }
-
-        override fun run() {
-            surface?.unlockCanvasAndPost(pendingCanvas)
-            pendingCanvas = null
-        }
-    }
+    private val surfaceHolder = SurfaceHolder()
 
     init {
+        id = View.generateViewId()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        viewTreeObserver.addOnGlobalFocusChangeListener(this)
         viewTreeObserver.addOnPreDrawListener(this)
         viewTreeObserver.addOnScrollChangedListener(this)
+    }
+
+    override fun onDetachedFromWindow() {
+        viewTreeObserver.removeOnGlobalFocusChangeListener(this)
+        viewTreeObserver.removeOnPreDrawListener(this)
+        viewTreeObserver.removeOnScrollChangedListener(this)
+        super.onDetachedFromWindow()
     }
 
     override fun onScrollChanged() {
@@ -97,24 +125,21 @@ class BridgeView @JvmOverloads constructor(
     }
 
     override fun onPreDraw(): Boolean {
-        val surface = surface
-        if (surface != null) {
-            if (!unlockCanvasAndPostDispatcher.hasPending) {
-                val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    surface.lockHardwareCanvas()
-                } else {
-                    surface.lockCanvas(null)
-                }
-                try {
-                    dispatchDraw(recorder)
-                } finally {
-                    unlockCanvasAndPostDispatcher.unlockCanvasAndPost(recorder)
-                }
-            } else {
-                invalidate()
-            }
+        val canvas = surfaceHolder.lockCanvas()
+        if (canvas != null) {
+            draw(canvas)
+            surfaceHolder.unlockCanvasAndPost(canvas)
         }
         return false
+    }
+
+    override fun onGlobalFocusChanged(
+        oldFocus: View?,
+        newFocus: View
+    ) {
+        if (newFocus.findViewById<View>(id) != this) {
+
+        }
     }
 
     @AnyThread
@@ -134,5 +159,6 @@ class BridgeView @JvmOverloads constructor(
 
         private val mainThread = createAsync(Looper.getMainLooper())
     }
+
 
 }

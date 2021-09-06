@@ -3,7 +3,10 @@ package open.source.uikit.renderstub
 import android.app.Service
 import android.content.Intent
 import android.content.res.Configuration
-import android.os.*
+import android.os.Binder
+import android.os.IBinder
+import android.os.Looper
+import android.os.Process
 import android.view.*
 import android.widget.PopupWindow
 import androidx.annotation.LayoutRes
@@ -27,48 +30,23 @@ class RenderStubManagerService : Service() {
         }
     }
 
-    override fun startActivity(intent: Intent?) {
-        super.startActivity(intent?.apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        })
-    }
-
-    override fun startActivity(intent: Intent?, options: Bundle?) {
-        super.startActivity(intent?.apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }, options)
-    }
-
-    override fun startActivities(intents: Array<out Intent>?) {
-        intents?.forEach {
-            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        super.startActivities(intents)
-    }
-
-    override fun startActivities(intents: Array<out Intent>?, options: Bundle?) {
-        intents?.forEach {
-            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        super.startActivities(intents, options)
-    }
-
     private inner class Session(
         @LayoutRes
         layoutId: Int
     ) : IRenderStubSession.Stub(), IBinder.DeathRecipient {
         private val window = PopupWindow()
-        private val bridge = BridgeView(this@RenderStubManagerService)
+        private val bridge = BridgeView(applicationContext)
 
         init {
             window.isClippingEnabled = false
             window.contentView = bridge
             linkToDeath(this, 0)
             mainThread.postAtFrontOfQueue {
-                LayoutInflater.from(this@RenderStubManagerService)
+                LayoutInflater.from(applicationContext)
                     .inflate(layoutId, bridge, true)
             }
         }
+
 
         @MainThread
         private fun attach(token: IBinder) {
@@ -84,7 +62,9 @@ class RenderStubManagerService : Service() {
             try {
                 return bridge.dispatchTouchEvent(event)
             } finally {
-                event.recycle()
+                if (Binder.getCallingPid() != Process.myPid()) {
+                    event.recycle()
+                }
             }
         }
 

@@ -3,7 +3,9 @@ package com.luke.android.blurlayout.sample
 import android.content.Context
 import android.graphics.Color
 import android.util.AttributeSet
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
+import android.webkit.WebViewClient
 
 
 class Test @JvmOverloads constructor(
@@ -12,5 +14,6 @@ class Test @JvmOverloads constructor(
     init {
         settings.javaScriptEnabled = true
         loadUrl("https://m.bilibili.com")
+        webViewClient = WebViewClient()
     }
 }

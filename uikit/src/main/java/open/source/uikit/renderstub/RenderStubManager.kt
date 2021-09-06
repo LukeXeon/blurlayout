@@ -72,7 +72,7 @@ class RenderStubManager(private val context: Application) {
         }
 
         fun close() {
-            session.close()
+            session.runCatching { close() }
             binderDied()
         }
 

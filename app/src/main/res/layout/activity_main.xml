@@ -7,6 +7,9 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".MainActivity">
+<!--    <com.luke.android.blurlayout.sample.Test-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="match_parent"/>-->
     <open.source.uikit.renderstub.ViewRenderStub
         android:layout="@layout/layout_web_view"
         android:layout_width="match_parent"
